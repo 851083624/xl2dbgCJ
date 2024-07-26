@@ -19,7 +19,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
         cout << "dll DLL_PROCESS_ATTACH" << endl;
         if (!hook::getInstance().loadDriver())
         {
-            break;
+            return false;   // 这里返回false 是不会加载dll的
         }
         ret = hook::getInstance().startHook();
         if (ret != 0)
@@ -27,7 +27,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
             char msg[256] = { 0 };
             sprintf_s(msg, "hook fail %d", ret);
             MessageBoxA(0, msg, "err", 0);
-            break;
+            return false;
         }
         break;
     case DLL_THREAD_ATTACH:

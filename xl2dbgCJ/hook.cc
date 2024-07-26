@@ -28,8 +28,12 @@ bool hook::loadDriver()
 	const char* sysFileName = "xl2kerneldbg.sys";
 	//设置驱动名称
 	char filePath[MAX_PATH] = { 0 };
-	dc->GetAppPath(filePath);
+	//dc->GetAppPath(filePath);
+	const char* dyPath = "C:\\Users\\Administrator\\Desktop\\xl2dbg\\";
+	memcpy(filePath, dyPath, strlen(dyPath));
 	strcat_s(filePath, sysFileName);
+	cout << "driver file path: " << filePath << endl;
+	//MessageBoxA(0, filePath, 0, 0);
 	dc->m_pSysPath = filePath;
 	dc->m_pDisplayName = "xl2kerneldbg";
 	dc->m_pServiceName = "xl2kerneldbg";
@@ -135,13 +139,6 @@ int hook::startHook()
 		return 12;
 	}
 
-	//_Original_DebugActiveProcess = DetourFindFunction("kernel32.dll", "DebugActiveProcess");
-	//ret = DetourAttach(&_Original_DebugActiveProcess, NewDebugActiveProcess);
-	//if (ret != NO_ERROR)
-	//{
-	//	return 13;
-	//}
-
 	_Original_NtDebugActiveProcess = DetourFindFunction("Ntdll.dll", "NtDebugActiveProcess");
 	ret = DetourAttach(&_Original_NtDebugActiveProcess, NewNtDebugActiveProcess);
 	if (ret != NO_ERROR)
@@ -149,34 +146,12 @@ int hook::startHook()
 		return 14;
 	}
 
-
-	//_Original_NtRemoveProcessDebug = DetourFindFunction("Ntdll.dll", "NtRemoveProcessDebug");
-	//ret = DetourAttach(&_Original_NtRemoveProcessDebug, NewNtRemoveProcessDebug);
-	//if (ret != NO_ERROR)
-	//{
-	//	return 15;
-	//}
-
-	//_Original_DbgUiWaitStateChange = DetourFindFunction("Ntdll.dll", "DbgUiWaitStateChange");
-	//ret = DetourAttach(&_Original_DbgUiWaitStateChange, NewDbgUiWaitStateChange);
-	//if (ret != NO_ERROR)
-	//{
-	//	return 16;
-	//}
-
 	_Original_NtWaitForDebugEvent = DetourFindFunction("Ntdll.dll", "NtWaitForDebugEvent");
 	ret = DetourAttach(&_Original_NtWaitForDebugEvent, NewNtWaitForDebugEvent);
 	if (ret != NO_ERROR)
 	{
 		return 21;
 	}
-
-	//_Original_DbgUiContinue = DetourFindFunction("Ntdll.dll", "DbgUiContinue");
-	//ret = DetourAttach(&_Original_DbgUiContinue, NewDbgUiContinue);
-	//if (ret != NO_ERROR)
-	//{
-	//	return 17;
-	//}
 
 	_Original_NtDebugContinue = DetourFindFunction("Ntdll.dll", "NtDebugContinue");
 	ret = DetourAttach(&_Original_NtDebugContinue, NewNtDebugContinue);
@@ -191,20 +166,6 @@ int hook::startHook()
 	{
 		return 18;
 	}
-
-	//_Original_DbgUiConnectToDbg = DetourFindFunction("Ntdll.dll", "DbgUiConnectToDbg");
-	//ret = DetourAttach(&_Original_DbgUiConnectToDbg, NewDbgUiConnectToDbg);
-	//if (ret != NO_ERROR)
-	//{
-	//	return 19;
-	//}
-
-	//_Original_DbgUiDebugActiveProcess = DetourFindFunction("Ntdll.dll", "DbgUiDebugActiveProcess");
-	//ret = DetourAttach(&_Original_DbgUiDebugActiveProcess, NewDbgUiDebugActiveProcess);
-	//if (ret != NO_ERROR)
-	//{
-	//	return 20;
-	//}
 
 	_Original_DbgUiIssueRemoteBreakin = DetourFindFunction("Ntdll.dll", "DbgUiIssueRemoteBreakin");
 	ret = DetourAttach(&_Original_DbgUiIssueRemoteBreakin, NewDbgUiIssueRemoteBreakin);
@@ -472,7 +433,7 @@ NTSTATUS NTAPI hook::NewNtDebugActiveProcess(
 	Message_NewNtDebugActiveProcess temp_message = { 0 };
 	temp_message.ProcessId = (HANDLE)GetProcessId(ProcessHandle);//DebugObjectHandle就是目标进程ID
 	temp_message.ProcessHandle = ProcessHandle;
-	temp_message.DebugObjectHandle = _DebugObjectHandle; // obh6
+	temp_message.DebugObjectHandle = _DebugObjectHandle; // obh6	_DebugObjectHandle
 	IO_STATUS_BLOCK IoStatusBlock = { 0 };
 	status = ZwDeviceIoControlFile(ScmDrvCtrl::getInstance().m_hDriver, nullptr, nullptr, nullptr,
 		&IoStatusBlock, IO_NtDebugActiveProcess,

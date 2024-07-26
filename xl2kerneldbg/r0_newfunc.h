@@ -5,7 +5,7 @@
 #include "./KernelHookEngine/KernelHookEngine.h"
 
 
-struct DebugInfomation
+struct DebugInformation
 {
 	HANDLE SourceProcessId;
 	HANDLE TargetProcessId;
@@ -35,7 +35,8 @@ public:
     NTSTATUS NTAPI NewNtRemoveProcessDebug(Message_NewNtRemoveProcessDebug* message);
 
 private:
-	DebugInfomation* insertDebugObject(PDEBUG_OBJECT DebugObject, HANDLE Handle);
+	DebugInformation* insertDebugObject(PDEBUG_OBJECT DebugObject, HANDLE Handle);
+	DebugInformation* findDebugInfoByProcessId(HANDLE SourceProcessId, HANDLE TargetProcessId);
 
 private:
 	NTSTATUS NTAPI PrivateDbgkpPostFakeProcessCreateMessages(

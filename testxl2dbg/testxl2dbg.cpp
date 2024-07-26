@@ -5,8 +5,40 @@
 #include<Windows.h>
 #include "./ScmDrvCtrl.h"
 
+#include <Shlwapi.h>
+#include <TlHelp32.h>
+
 using namespace std;
 
+DWORD GetPIDForProcess(const char * processName)
+{
+    BOOL            working = 0;
+    PROCESSENTRY32 lppe = { 0 };
+    DWORD            targetPid = 0;
+
+    wchar_t str1[256] = {0};
+    wsprintf(str1, L"%hs", processName);
+
+    //wprintf(L"%ws", str1);
+
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnapshot)
+    {
+        lppe.dwSize = sizeof(lppe);
+        working = Process32First(hSnapshot, &lppe);
+        while (working)
+        {
+            if (std::wstring(lppe.szExeFile) == str1)
+            {
+                targetPid = lppe.th32ProcessID;
+                break;
+            }
+            working = Process32Next(hSnapshot, &lppe);
+        }
+    }
+    CloseHandle(hSnapshot);
+    return targetPid;
+}
 
 void DebugLoop2(DWORD dwProcessID)
 {
@@ -78,7 +110,7 @@ void DebugLoop2(DWORD dwProcessID)
         //}
 
         //system("pause");
-        cout << "x" << endl;
+        //cout << "x" << endl;
         ContinueDebugEvent(DebugEvent.dwProcessId, DebugEvent.dwThreadId, dwContinueStatus);
         /*cout << "is stop debug ?" << endl;
         cin >> stopDebug;
@@ -118,10 +150,25 @@ int main(int paramCount,char** param)
 
     if (param[1]==NULL || _stricmp(param[1], "") == 0)
     {
-        cout << "Input ProcessID" << endl;
-        cin >> instr;
-        if (_stricmp(instr, "q") == 0) return 0;
-        dwProcessID = atoi(instr);
+
+        const char* processName = "ConsDemo20240706.exe";
+
+        dwProcessID = GetPIDForProcess(processName);
+        if (dwProcessID == 0)
+        {
+            //cout << processName << "  find pid fail!" << endl;
+            //system("pause");
+            //return 0;
+
+            cout << "Input ProcessID" << endl;
+            cin >> instr;
+            if (_stricmp(instr, "q") == 0) return 0;
+            dwProcessID = atoi(instr);
+        } else {
+            cout << processName << "  find pid ok:" << dwProcessID << endl;
+            system("pause");
+        }
+        
     }
     else
     {
