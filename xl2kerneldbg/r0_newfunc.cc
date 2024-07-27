@@ -812,6 +812,7 @@ Return Value:
 			//
 
 			if (!IS_SYSTEM_THREAD(Thread)) {
+				//DbgPrint("Thread skip Suspend Thread:%llx\n", Thread);
 				Status1 = PsSuspendThread(Thread, NULL);
 				if (NT_SUCCESS(Status1)) {
 					Flags |= DEBUG_EVENT_SUSPEND;
@@ -865,6 +866,7 @@ Return Value:
 			ApiMsg.ApiNumber = DbgKmCreateThreadApi;
 			ApiMsg.u.CreateThread.StartAddress = PrivateGetThreadStartAddress(Thread);//Thread->StartAddress;
 		}
+		//__debugbreak();
 		Status = PrivateDbgkpQueueMessage(Process,
 			Thread,
 			&ApiMsg,
@@ -1157,6 +1159,7 @@ Return Value:
 
 --*/
 {
+
 
 	PDEBUG_EVENT DebugEvent;
 	DEBUG_EVENT StaticDebugEvent;
