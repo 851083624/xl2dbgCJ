@@ -710,16 +710,16 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpPostFakeProcessCreateMessages(
 
 	Status = PrivateDbgkpPostFakeThreadMessages(Process, DebugObject, NULL, &Thread, &LastThread);
 
-	if (NT_SUCCESS(Status)) {
-		Status = PrivateDbgkpPostFakeModuleMessages(Process, Thread, DebugObject);
-		if (!NT_SUCCESS(Status)) {
-			ObDereferenceObject(LastThread);
-			LastThread = NULL;
-		}
-		ObDereferenceObject(Thread);
-	} else {
-		LastThread = NULL;
-	}
+	//if (NT_SUCCESS(Status)) {
+	//	Status = PrivateDbgkpPostFakeModuleMessages(Process, Thread, DebugObject);
+	//	if (!NT_SUCCESS(Status)) {
+	//		ObDereferenceObject(LastThread);
+	//		LastThread = NULL;
+	//	}
+	//	ObDereferenceObject(Thread);
+	//} else {
+	//	LastThread = NULL;
+	//}
 	
 	KeUnstackDetachProcess(&ApcState);
 
@@ -866,7 +866,6 @@ Return Value:
 			ApiMsg.ApiNumber = DbgKmCreateThreadApi;
 			ApiMsg.u.CreateThread.StartAddress = PrivateGetThreadStartAddress(Thread);//Thread->StartAddress;
 		}
-		//__debugbreak();
 		Status = PrivateDbgkpQueueMessage(Process,
 			Thread,
 			&ApiMsg,
@@ -885,7 +884,7 @@ Return Value:
 			//PsQuitNextProcessThread(Thread);
 			ObDereferenceObject(Thread);
 			break;
-		}
+		} 
 		else if (IsFirstThread) {
 			First = FALSE;
 			ObReferenceObject(Thread);
@@ -1371,6 +1370,7 @@ Return Value:
 					&ApiMsg,
 					DEBUG_EVENT_NOWAIT,
 					DebugObject);
+				Status = STATUS_SUCCESS;
 				if (!NT_SUCCESS(Status) && ApiMsg.u.LoadDll.FileHandle != NULL) {
 					ObCloseHandle(ApiMsg.u.LoadDll.FileHandle, KernelMode);
 				}
