@@ -291,7 +291,7 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObj, PUNICODE_STRING pRegi
 	DbgPrint("[xl2kerneldbg]ntoskrnl.exe base addr: %llx", ntos_base_addr);
 
 	r0_newfunc::getInstance().init(ntos_base_addr);
-	//r0_newfunc::getInstance().startHook();
+	r0_newfunc::getInstance().startHook();
 
 	//返回加载驱动的状态（如果返回失败，驱动讲被清除出内核空间）
 	return STATUS_SUCCESS;

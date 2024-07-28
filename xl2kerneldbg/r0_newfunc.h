@@ -142,6 +142,7 @@ private:
 	POBJECT_TYPE* _DbgkDebugObjectType = nullptr;
 	bool hooked = false;
 	PVOID _PsSystemDllBase = nullptr;
+	FAST_MUTEX KiGenericCallDpcMutex;
 private:
 	bool IS_SYSTEM_THREAD(PETHREAD Thread)
 	{

@@ -102,6 +102,8 @@ VOID r0_newfunc::init(ULONG64 ntos_base_addr)
 
 	//__debugbreak();
 
+	//ExInitializeFastMutex(&KiGenericCallDpcMutex);
+
 }
 
 void r0_newfunc::startHook()
@@ -590,9 +592,15 @@ DebugInformation* r0_newfunc::insertDebugObject(PDEBUG_OBJECT DebugObject, HANDL
 
 DebugInformation* r0_newfunc::findDebugInfoByProcessId(HANDLE SourceProcessId, HANDLE TargetProcessId)
 {
-	DebugInformation* debugInfo;
+
+	if (IsListEmpty(&debugLinkListHead))
+	{
+		return NULL;
+	}
+	
 	PLIST_ENTRY pEntry = debugLinkListHead.Blink;
 
+	DebugInformation* debugInfo;
 	if ((ULONG)SourceProcessId == -2 && (ULONG)TargetProcessId == -2)
 	{
 		return NULL;
@@ -652,6 +660,7 @@ NTSTATUS r0_newfunc::NewNtDebugActiveProcess(Message_NewNtDebugActiveProcess* me
 		return STATUS_ACCESS_DENIED;
 	}
 
+
 	HANDLE cur_pid = PsGetCurrentProcessId();
 	DebugInformation* debugInfo = findDebugInfoByProcessId(cur_pid, (HANDLE)-2);
 	if (debugInfo == nullptr)
@@ -679,6 +688,7 @@ NTSTATUS r0_newfunc::NewNtDebugActiveProcess(Message_NewNtDebugActiveProcess* me
 		//ObDereferenceObject(DebugObject);//不需要解引用
 	}
 	ObDereferenceObject(Process);
+
 
 	DbgPrint("[xl2kerneldbg] called NewNtDebugActiveProcess ===========> Status:%x \n", Status);
 
@@ -710,16 +720,16 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpPostFakeProcessCreateMessages(
 
 	Status = PrivateDbgkpPostFakeThreadMessages(Process, DebugObject, NULL, &Thread, &LastThread);
 
-	//if (NT_SUCCESS(Status)) {
-	//	Status = PrivateDbgkpPostFakeModuleMessages(Process, Thread, DebugObject);
-	//	if (!NT_SUCCESS(Status)) {
-	//		ObDereferenceObject(LastThread);
-	//		LastThread = NULL;
-	//	}
-	//	ObDereferenceObject(Thread);
-	//} else {
-	//	LastThread = NULL;
-	//}
+	if (NT_SUCCESS(Status)) {
+		Status = PrivateDbgkpPostFakeModuleMessages(Process, Thread, DebugObject);
+		if (!NT_SUCCESS(Status)) {
+			ObDereferenceObject(LastThread);
+			LastThread = NULL;
+		}
+		ObDereferenceObject(Thread);
+	} else {
+		LastThread = NULL;
+	}
 	
 	KeUnstackDetachProcess(&ApcState);
 
@@ -871,6 +881,16 @@ Return Value:
 			&ApiMsg,
 			Flags,
 			DebugObject);
+		//if (Flags & DEBUG_EVENT_SUSPEND) {
+		//	PsResumeThread(Thread, NULL);
+		//}
+		//if (Flags & DEBUG_EVENT_RELEASE) {
+		//	ExReleaseRundownProtection(PrivateGetThreadRundownProtect(Thread));	// &Thread->RundownProtect
+		//}
+		if (ApiMsg.ApiNumber == DbgKmCreateProcessApi && ApiMsg.u.CreateProcessInfo.FileHandle != NULL) {
+			ObCloseHandle(ApiMsg.u.CreateProcessInfo.FileHandle, KernelMode);
+		}
+		//Status = STATUS_SUCCESS;
 		if (!NT_SUCCESS(Status)) {
 			if (Flags & DEBUG_EVENT_SUSPEND) {
 				PsResumeThread(Thread, NULL);
@@ -1370,8 +1390,7 @@ Return Value:
 					&ApiMsg,
 					DEBUG_EVENT_NOWAIT,
 					DebugObject);
-				Status = STATUS_SUCCESS;
-				if (!NT_SUCCESS(Status) && ApiMsg.u.LoadDll.FileHandle != NULL) {
+				if (ApiMsg.u.LoadDll.FileHandle != NULL) {	// !NT_SUCCESS(Status) && 
 					ObCloseHandle(ApiMsg.u.LoadDll.FileHandle, KernelMode);
 				}
 
@@ -1452,7 +1471,7 @@ Return Value:
 						&ApiMsg,
 						DEBUG_EVENT_NOWAIT,
 						DebugObject);
-					if (!NT_SUCCESS(Status) && ApiMsg.u.LoadDll.FileHandle != NULL) {
+					if (ApiMsg.u.LoadDll.FileHandle != NULL) { // !NT_SUCCESS(Status) && 
 						ObCloseHandle(ApiMsg.u.LoadDll.FileHandle, KernelMode);
 					}
 				}
@@ -1492,11 +1511,18 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpSendApiMessage(
 	Process = PsGetCurrentProcess();
 	PS_SET_BITS(PrivateGetProcessFlags(Process), PS_PROCESS_FLAGS_CREATE_REPORTED);
 	st = PrivateDbgkpQueueMessage(Process, PsGetCurrentThread(), ApiMsg, 0, NULL);
+	if (ApiMsg->ApiNumber == DbgKmCreateProcessApi && ApiMsg->u.CreateProcessInfo.FileHandle != NULL) {
+		ObCloseHandle(ApiMsg->u.CreateProcessInfo.FileHandle, KernelMode);
+	}
+	if (ApiMsg->u.LoadDll.FileHandle != NULL) {
+		ObCloseHandle(ApiMsg->u.LoadDll.FileHandle, KernelMode);
+	}
 	ZwFlushInstructionCache(NtCurrentProcess(), NULL, 0);
 	if (SuspendProcess)
 	{
 		KeThawAllThreads();
 	}
+
 	//DbgPrint("[xl2kerneldbg] PrivateDbgkpSendApiMessage called...status:%x\n", st);
 	return st;
 }
@@ -1523,7 +1549,7 @@ VOID NTAPI NewFunc::NewKiDispatchException(
 #endif // _AMD64_
 {
 
-	//return ((_KiDispatchException)_This->NewKiDispatchExceptionHookInfo->ori_api_address)(ExceptionRecord, ExceptionFrame, TrapFrame, PreviousMode, FirstChance);
+	return ((_KiDispatchException)_This->NewKiDispatchExceptionHookInfo->ori_api_address)(ExceptionRecord, ExceptionFrame, TrapFrame, PreviousMode, FirstChance);
 
 	if (PreviousMode == KernelMode)
 	{
@@ -1537,62 +1563,56 @@ VOID NTAPI NewFunc::NewKiDispatchException(
 		//if (FirstChance == true)
 		{
 			HANDLE temp_pid = PsGetCurrentProcessId();
-			DebugInformation* x;
-			PLIST_ENTRY pEntry = _This->debugLinkListHead.Blink;
-			do
+			DebugInformation* debugInfo = _This->findDebugInfoByProcessId(temp_pid, temp_pid);
+
+			if (debugInfo != NULL && debugInfo->TargetProcessId == temp_pid)
 			{
-				x = CONTAINING_RECORD(pEntry, DebugInformation, ListEntry);
-			//for (auto x : _This->_DebugInfomationVector)
-			//{
-				if (x->TargetProcessId == temp_pid)
+
+				/*if ((_This->PrivateGetProcessWow64Process(PsGetCurrentProcess()) != NULL) &&
+					(ExceptionRecord->ExceptionCode == STATUS_DATATYPE_MISALIGNMENT) &&
+					((TrapFrame->EFlags & EFLAGS_AC_MASK) != 0))
 				{
-
-					/*if ((_This->PrivateGetProcessWow64Process(PsGetCurrentProcess()) != NULL) &&
-						(ExceptionRecord->ExceptionCode == STATUS_DATATYPE_MISALIGNMENT) &&
-						((TrapFrame->EFlags & EFLAGS_AC_MASK) != 0))
-					{
-						TrapFrame->EFlags &= ~EFLAGS_AC_MASK;
-						break;
-					}*/
-
-					if ((TrapFrame->SegCs & 0xfff8) == KGDT64_R3_CMCODE)
-					{
-						switch (ExceptionRecord->ExceptionCode)
-						{
-						case STATUS_BREAKPOINT:
-							ExceptionRecord->ExceptionCode = STATUS_WX86_BREAKPOINT;
-							break;
-						case STATUS_SINGLE_STEP:
-							ExceptionRecord->ExceptionCode = STATUS_WX86_SINGLE_STEP;
-							break;
-						}
-					}
-
-					//忽略ExceptionForwarded判断(debugobj
-					//debugobject为空时,该函数不会被直接 所以捕获目标进程后直接转发过去
-					if (NewDbgkForwardException(ExceptionRecord, TRUE, FALSE))
-					{
-						//如果调试器处理成功 直接返回 不继续处理了 仅只给一次机会.
-						//return; //不返回模式专治各种主动制造异常
-					}
-
-					if ((TrapFrame->SegCs & 0xfff8) == KGDT64_R3_CMCODE)
-					{
-						switch (ExceptionRecord->ExceptionCode)
-						{
-						case STATUS_WX86_BREAKPOINT:
-							ExceptionRecord->ExceptionCode = STATUS_BREAKPOINT;
-							break;
-						case STATUS_WX86_SINGLE_STEP:
-							ExceptionRecord->ExceptionCode = STATUS_SINGLE_STEP;
-							break;
-						}
-					}
+					TrapFrame->EFlags &= ~EFLAGS_AC_MASK;
 					break;
+				}*/
+
+				if ((TrapFrame->SegCs & 0xfff8) == KGDT64_R3_CMCODE)
+				{
+					switch (ExceptionRecord->ExceptionCode)
+					{
+					case STATUS_BREAKPOINT:
+						ExceptionRecord->ExceptionCode = STATUS_WX86_BREAKPOINT;
+						break;
+					case STATUS_SINGLE_STEP:
+						ExceptionRecord->ExceptionCode = STATUS_WX86_SINGLE_STEP;
+						break;
+					}
 				}
-			//}
-				pEntry = pEntry->Blink;
-			} while (pEntry->Blink != &_This->debugLinkListHead);
+
+				//忽略ExceptionForwarded判断(debugobj
+				//debugobject为空时,该函数不会被直接 所以捕获目标进程后直接转发过去
+				if (NewDbgkForwardException(ExceptionRecord, TRUE, FALSE))
+				{
+					//DbgPrint("NewDbgkForwardException success ExceptionRecord->ExceptionCode:%llx\n", ExceptionRecord->ExceptionCode);
+					//if ((ULONG)ExceptionRecord->ExceptionCode == 0x80000004)
+					//	return;
+					//如果调试器处理成功 直接返回 不继续处理了 仅只给一次机会.
+					//return; //不返回模式专治各种主动制造异常
+				}
+
+				if ((TrapFrame->SegCs & 0xfff8) == KGDT64_R3_CMCODE)
+				{
+					switch (ExceptionRecord->ExceptionCode)
+					{
+					case STATUS_WX86_BREAKPOINT:
+						ExceptionRecord->ExceptionCode = STATUS_BREAKPOINT;
+						break;
+					case STATUS_WX86_SINGLE_STEP:
+						ExceptionRecord->ExceptionCode = STATUS_SINGLE_STEP;
+						break;
+					}
+				}
+			}
 		}
 	}
 
@@ -1615,52 +1635,46 @@ BOOLEAN NTAPI r0_newfunc::NewDbgkForwardException(
 	PDBGKM_EXCEPTION args;
 	DBGKM_APIMSG m;
 	NTSTATUS st;
+
 	HANDLE temp_pid = PsGetCurrentProcessId();
+	DebugInformation* debugInfo = _This->findDebugInfoByProcessId(temp_pid, temp_pid);
 
-	DebugInformation* x;
-	PLIST_ENTRY pEntry = _This->debugLinkListHead.Blink;
-	do
+	if (debugInfo != NULL && debugInfo->TargetProcessId == temp_pid)
 	{
-		x = CONTAINING_RECORD(pEntry, DebugInformation, ListEntry);
-	//for (auto x : _This->_DebugInfomationVector)
-	//{
-		if (x->TargetProcessId == temp_pid)
+		//DbgPrint("[xl2kerneldbg] call start NewDbgkForwardException...\n");
+		//DbgPrint("ExceptionRecord:%llx\n", ExceptionRecord);
+		//DbgPrint("DebugException:%d\n", DebugException);
+		//DbgPrint("SecondChance:%d\n", SecondChance);
+
+		//捕获并确定为目标进程
+		//忽略PS_CROSS_THREAD_FLAGS_HIDEFROMDBG
+		//忽略Process->DebugPort
+		//忽略LpcPort = FALSE;
+		//if (DebugException == FALSE)
+		//{
+		//	DbgPrint("NewDbgkForwardException error DebugException == FALSE\n");
+		//	return FALSE;
+		//	DbgBreakPoint();//出现问题 该参数不应该为false
+		//}
+		//发送消息
+
+		args = &m.u.Exception;
+
+		DBGKM_FORMAT_API_MSG(m, DbgKmExceptionApi, sizeof(*args));
+
+		args->ExceptionRecord = *ExceptionRecord;
+		args->FirstChance = !SecondChance;
+
+		st = _This->PrivateDbgkpSendApiMessage(&m, DebugException);
+
+
+		if (!NT_SUCCESS(st) || ((DebugException) &&
+			(m.ReturnedStatus == DBG_EXCEPTION_NOT_HANDLED || !NT_SUCCESS(m.ReturnedStatus))))
 		{
-
-
-			//DbgPrint("[xl2kerneldbg] call start NewDbgkForwardException...\n");
-			//DbgPrint("ExceptionRecord:%llx\n", ExceptionRecord);
-			//DbgPrint("DebugException:%d\n", DebugException);
-			//DbgPrint("SecondChance:%d\n", SecondChance);
-
-			//捕获并确定为目标进程
-			//忽略PS_CROSS_THREAD_FLAGS_HIDEFROMDBG
-			//忽略Process->DebugPort
-			//忽略LpcPort = FALSE;
-			if (DebugException == FALSE)
-			{
-				DbgBreakPoint();//出现问题 该参数不应该为false
-			}
-			//发送消息
-
-			args = &m.u.Exception;
-
-			DBGKM_FORMAT_API_MSG(m, DbgKmExceptionApi, sizeof(*args));
-
-			args->ExceptionRecord = *ExceptionRecord;
-			args->FirstChance = !SecondChance;
-
-			st = _This->PrivateDbgkpSendApiMessage(&m, DebugException);
-			if (!NT_SUCCESS(st) || ((DebugException) &&
-				(m.ReturnedStatus == DBG_EXCEPTION_NOT_HANDLED || !NT_SUCCESS(m.ReturnedStatus))))
-			{
-				return FALSE;//处理失败
-			}
-			return TRUE;//未出现问题 直接返回 不继续往下调用
+			return FALSE;//处理失败
 		}
-	//}
-		pEntry = pEntry->Blink;
-	} while (pEntry->Blink != &_This->debugLinkListHead);
+		return TRUE;//未出现问题 直接返回 不继续往下调用
+	}
 
 	_DbgkForwardException func = (_DbgkForwardException)_This->NewDbgkForwardExceptionHookInfo->ori_api_address;
 	if (!func)
@@ -1688,161 +1702,153 @@ VOID NTAPI r0_newfunc::NewDbgkCreateThread(PETHREAD Thread, PVOID StartAddress)
 
 	PAGED_CODE();
 
-	DebugInformation* x;
-	PLIST_ENTRY pEntry = _This->debugLinkListHead.Blink;
-	do
+	HANDLE temp_pid = PsGetCurrentProcessId();
+	DebugInformation* debugInfo = _This->findDebugInfoByProcessId(temp_pid, temp_pid);
+
+	if (debugInfo != NULL && debugInfo->TargetProcessId == temp_pid)
 	{
-		x = CONTAINING_RECORD(pEntry, DebugInformation, ListEntry);
-	//for (auto x : _This->_DebugInfomationVector)
-	//{
-		if (x->TargetProcessId == ProcessId)
+		//跳过PsCallImageNotifyRoutines 此过程和调试无关
+		//忽略DebugPort
+		//if (_This->PrivateGetProcessUserTime(Process))
 		{
-			//跳过PsCallImageNotifyRoutines 此过程和调试无关
-			//忽略DebugPort
-			//if (_This->PrivateGetProcessUserTime(Process))
+			//PS_SET_BITS(_This->PrivateGetProcessFlags(Process), PS_PROCESS_FLAGS_CREATE_REPORTED | PS_PROCESS_FLAGS_IMAGE_NOTIFY_DONE);
+		}
+
+		auto temp_result = PS_TEST_SET_BITS(_This->PrivateGetProcessFlags(Process), 0x400001);
+
+		if ((temp_result & PS_PROCESS_FLAGS_CREATE_REPORTED) == 0)
+			//if (*_This->PrivateGetProcessFlags(Process) & PS_PROCESS_FLAGS_CREATE_REPORTED)
+		{
+			CreateThreadArgs = &m.u.CreateProcessInfo.InitialThread;
+			CreateThreadArgs->SubSystemKey = 0;
+
+			CreateProcessArgs = &m.u.CreateProcessInfo;
+			CreateProcessArgs->SubSystemKey = 0;
+			CreateProcessArgs->FileHandle = _This->DbgkpSectionToFileHandle(_This->PrivateGetProcessSectionObject(Process));
+			CreateProcessArgs->BaseOfImage = _This->PrivateGetProcessSectionBaseAddress(Process);
+			CreateThreadArgs->StartAddress = NULL;
+			CreateProcessArgs->DebugInfoFileOffset = 0;
+			CreateProcessArgs->DebugInfoSize = 0;
+
+			__try
 			{
-				//PS_SET_BITS(_This->PrivateGetProcessFlags(Process), PS_PROCESS_FLAGS_CREATE_REPORTED | PS_PROCESS_FLAGS_IMAGE_NOTIFY_DONE);
+				NtHeaders = RtlImageNtHeader(_This->PrivateGetProcessSectionBaseAddress(Process));
+				if (NtHeaders)
+				{
+					if (_This->PrivateGetProcessWow64Process(PsGetCurrentProcess()) != NULL)
+					{
+						CreateThreadArgs->StartAddress = UlongToPtr(DBGKP_FIELD_FROM_IMAGE_OPTIONAL_HEADER((PIMAGE_NT_HEADERS32)NtHeaders, ImageBase) +
+							DBGKP_FIELD_FROM_IMAGE_OPTIONAL_HEADER((PIMAGE_NT_HEADERS32)NtHeaders, AddressOfEntryPoint));
+					}
+					else {
+						CreateThreadArgs->StartAddress = (PVOID)(DBGKP_FIELD_FROM_IMAGE_OPTIONAL_HEADER(NtHeaders, ImageBase) +
+							DBGKP_FIELD_FROM_IMAGE_OPTIONAL_HEADER(NtHeaders, AddressOfEntryPoint));
+					}
+					/*CreateThreadArgs->StartAddress = (PVOID)(
+						NtHeaders->OptionalHeader.ImageBase +
+						NtHeaders->OptionalHeader.AddressOfEntryPoint);*/
+					CreateProcessArgs->DebugInfoFileOffset = NtHeaders->FileHeader.PointerToSymbolTable;
+					CreateProcessArgs->DebugInfoSize = NtHeaders->FileHeader.NumberOfSymbols;
+				}
 			}
-
-			auto temp_result = PS_TEST_SET_BITS(_This->PrivateGetProcessFlags(Process), 0x400001);
-
-			if ((temp_result & PS_PROCESS_FLAGS_CREATE_REPORTED) == 0)
-				//if (*_This->PrivateGetProcessFlags(Process) & PS_PROCESS_FLAGS_CREATE_REPORTED)
+			__except (EXCEPTION_EXECUTE_HANDLER)
 			{
-				CreateThreadArgs = &m.u.CreateProcessInfo.InitialThread;
-				CreateThreadArgs->SubSystemKey = 0;
-
-				CreateProcessArgs = &m.u.CreateProcessInfo;
-				CreateProcessArgs->SubSystemKey = 0;
-				CreateProcessArgs->FileHandle = _This->DbgkpSectionToFileHandle(_This->PrivateGetProcessSectionObject(Process));
-				CreateProcessArgs->BaseOfImage = _This->PrivateGetProcessSectionBaseAddress(Process);
 				CreateThreadArgs->StartAddress = NULL;
 				CreateProcessArgs->DebugInfoFileOffset = 0;
 				CreateProcessArgs->DebugInfoSize = 0;
+			}
 
-				__try
+			DBGKM_FORMAT_API_MSG(m, DbgKmCreateProcessApi, sizeof(*CreateProcessArgs));
+			_This->PrivateDbgkpSendApiMessage(&m, FALSE);
+			if (CreateProcessArgs->FileHandle != NULL)
+			{
+				ObCloseHandle(CreateProcessArgs->FileHandle, KernelMode);
+			}
+
+			LoadDllArgs = &m.u.LoadDll;
+			LoadDllArgs->BaseOfDll = _This->_PsSystemDllBase;
+			LoadDllArgs->DebugInfoFileOffset = 0;
+			LoadDllArgs->DebugInfoSize = 0;
+
+			Teb = NULL;
+			__try
+			{
+				NtHeaders = RtlImageNtHeader(_This->_PsSystemDllBase);
+				if (NtHeaders)
 				{
-					NtHeaders = RtlImageNtHeader(_This->PrivateGetProcessSectionBaseAddress(Process));
-					if (NtHeaders)
-					{
-						if (_This->PrivateGetProcessWow64Process(PsGetCurrentProcess()) != NULL)
-						{
-							CreateThreadArgs->StartAddress = UlongToPtr(DBGKP_FIELD_FROM_IMAGE_OPTIONAL_HEADER((PIMAGE_NT_HEADERS32)NtHeaders, ImageBase) +
-								DBGKP_FIELD_FROM_IMAGE_OPTIONAL_HEADER((PIMAGE_NT_HEADERS32)NtHeaders, AddressOfEntryPoint));
-						}
-						else {
-							CreateThreadArgs->StartAddress = (PVOID)(DBGKP_FIELD_FROM_IMAGE_OPTIONAL_HEADER(NtHeaders, ImageBase) +
-								DBGKP_FIELD_FROM_IMAGE_OPTIONAL_HEADER(NtHeaders, AddressOfEntryPoint));
-						}
-						/*CreateThreadArgs->StartAddress = (PVOID)(
-							NtHeaders->OptionalHeader.ImageBase +
-							NtHeaders->OptionalHeader.AddressOfEntryPoint);*/
-						CreateProcessArgs->DebugInfoFileOffset = NtHeaders->FileHeader.PointerToSymbolTable;
-						CreateProcessArgs->DebugInfoSize = NtHeaders->FileHeader.NumberOfSymbols;
-					}
-				}
-				__except (EXCEPTION_EXECUTE_HANDLER)
-				{
-					CreateThreadArgs->StartAddress = NULL;
-					CreateProcessArgs->DebugInfoFileOffset = 0;
-					CreateProcessArgs->DebugInfoSize = 0;
+					LoadDllArgs->DebugInfoFileOffset = NtHeaders->FileHeader.PointerToSymbolTable;
+					LoadDllArgs->DebugInfoSize = NtHeaders->FileHeader.NumberOfSymbols;
 				}
 
-				DBGKM_FORMAT_API_MSG(m, DbgKmCreateProcessApi, sizeof(*CreateProcessArgs));
-				_This->PrivateDbgkpSendApiMessage(&m, FALSE);
-				if (CreateProcessArgs->FileHandle != NULL)
-				{
-					ObCloseHandle(CreateProcessArgs->FileHandle, KernelMode);
-				}
-
-				LoadDllArgs = &m.u.LoadDll;
-				LoadDllArgs->BaseOfDll = _This->_PsSystemDllBase;
-				LoadDllArgs->DebugInfoFileOffset = 0;
-				LoadDllArgs->DebugInfoSize = 0;
-
-				Teb = NULL;
-				__try
-				{
-					NtHeaders = RtlImageNtHeader(_This->_PsSystemDllBase);
-					if (NtHeaders)
-					{
-						LoadDllArgs->DebugInfoFileOffset = NtHeaders->FileHeader.PointerToSymbolTable;
-						LoadDllArgs->DebugInfoSize = NtHeaders->FileHeader.NumberOfSymbols;
-					}
-
-					Teb = (PTEB)PsGetThreadTeb(Thread);
-					if (Teb != NULL)
-					{
-						Teb->NtTib.ArbitraryUserPointer = Teb->StaticUnicodeBuffer;
-						wcsncpy(Teb->StaticUnicodeBuffer,
-							L"ntdll.dll",
-							sizeof(Teb->StaticUnicodeBuffer) / sizeof(Teb->StaticUnicodeBuffer[0]));
-						LoadDllArgs->NamePointer = &Teb->NtTib.ArbitraryUserPointer;
-					}
-				}
-				__except (EXCEPTION_EXECUTE_HANDLER)
-				{
-					LoadDllArgs->DebugInfoFileOffset = 0;
-					LoadDllArgs->DebugInfoSize = 0;
-					LoadDllArgs->NamePointer = NULL;
-				}
-
-				InitializeObjectAttributes(
-					&Obja,
-					(PUNICODE_STRING)&PsNtDllPathName,
-					OBJ_CASE_INSENSITIVE | OBJ_FORCE_ACCESS_CHECK | OBJ_KERNEL_HANDLE,
-					NULL,
-					NULL
-				);
-
-				Status = ZwOpenFile(
-					&LoadDllArgs->FileHandle,
-					(ACCESS_MASK)(GENERIC_READ | SYNCHRONIZE),
-					&Obja,
-					&IoStatusBlock,
-					FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
-					FILE_SYNCHRONOUS_IO_NONALERT
-				);
-
-				if (!NT_SUCCESS(Status))
-				{
-					LoadDllArgs->FileHandle = NULL;
-				}
-
-				DBGKM_FORMAT_API_MSG(m, DbgKmLoadDllApi, sizeof(*LoadDllArgs));
-				_This->PrivateDbgkpSendApiMessage(&m, TRUE);
-
-				if (LoadDllArgs->FileHandle != NULL)
-				{
-					ObCloseHandle(LoadDllArgs->FileHandle, KernelMode);
-				}
-
+				Teb = (PTEB)PsGetThreadTeb(Thread);
 				if (Teb != NULL)
 				{
-					__try
-					{
-						Teb->NtTib.ArbitraryUserPointer = NULL;
-					}
-					__except (EXCEPTION_EXECUTE_HANDLER) {}
+					Teb->NtTib.ArbitraryUserPointer = Teb->StaticUnicodeBuffer;
+					wcsncpy(Teb->StaticUnicodeBuffer,
+						L"ntdll.dll",
+						sizeof(Teb->StaticUnicodeBuffer) / sizeof(Teb->StaticUnicodeBuffer[0]));
+					LoadDllArgs->NamePointer = &Teb->NtTib.ArbitraryUserPointer;
 				}
 			}
-			else
+			__except (EXCEPTION_EXECUTE_HANDLER)
 			{
-				CreateThreadArgs = &m.u.CreateThread;
-				CreateThreadArgs->SubSystemKey = 0;
-				CreateThreadArgs->StartAddress = *(void**)(_This->PrivateGetThreadStartAddress(Thread));
-				DbgPrint("111111 &CreateThreadArgs->StartAddress:%llx\n", &CreateThreadArgs->StartAddress);
-				DbgPrint("111111 CreateThreadArgs->StartAddress:%llx\n", CreateThreadArgs->StartAddress);
-				DbgPrint("111111 Thread:%llx\n", Thread);
-				DbgPrint("111111 _This->PrivateGetThreadStartAddress(Thread):%llx\n", _This->PrivateGetThreadStartAddress(Thread));
-				DBGKM_FORMAT_API_MSG(m, DbgKmCreateThreadApi, sizeof(*CreateThreadArgs));
-				_This->PrivateDbgkpSendApiMessage(&m, TRUE);
+				LoadDllArgs->DebugInfoFileOffset = 0;
+				LoadDllArgs->DebugInfoSize = 0;
+				LoadDllArgs->NamePointer = NULL;
 			}
-			break;
+
+			InitializeObjectAttributes(
+				&Obja,
+				(PUNICODE_STRING)&PsNtDllPathName,
+				OBJ_CASE_INSENSITIVE | OBJ_FORCE_ACCESS_CHECK | OBJ_KERNEL_HANDLE,
+				NULL,
+				NULL
+			);
+
+			Status = ZwOpenFile(
+				&LoadDllArgs->FileHandle,
+				(ACCESS_MASK)(GENERIC_READ | SYNCHRONIZE),
+				&Obja,
+				&IoStatusBlock,
+				FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
+				FILE_SYNCHRONOUS_IO_NONALERT
+			);
+
+			if (!NT_SUCCESS(Status))
+			{
+				LoadDllArgs->FileHandle = NULL;
+			}
+
+			DBGKM_FORMAT_API_MSG(m, DbgKmLoadDllApi, sizeof(*LoadDllArgs));
+			_This->PrivateDbgkpSendApiMessage(&m, TRUE);
+
+			if (LoadDllArgs->FileHandle != NULL)
+			{
+				ObCloseHandle(LoadDllArgs->FileHandle, KernelMode);
+			}
+
+			if (Teb != NULL)
+			{
+				__try
+				{
+					Teb->NtTib.ArbitraryUserPointer = NULL;
+				}
+				__except (EXCEPTION_EXECUTE_HANDLER) {}
+			}
 		}
-	//}
-		pEntry = pEntry->Blink;
-	} while (pEntry->Blink != &_This->debugLinkListHead);
+		else
+		{
+			CreateThreadArgs = &m.u.CreateThread;
+			CreateThreadArgs->SubSystemKey = 0;
+			CreateThreadArgs->StartAddress = *(void**)(_This->PrivateGetThreadStartAddress(Thread));
+			DbgPrint("111111 &CreateThreadArgs->StartAddress:%llx\n", &CreateThreadArgs->StartAddress);
+			DbgPrint("111111 CreateThreadArgs->StartAddress:%llx\n", CreateThreadArgs->StartAddress);
+			DbgPrint("111111 Thread:%llx\n", Thread);
+			DbgPrint("111111 _This->PrivateGetThreadStartAddress(Thread):%llx\n", _This->PrivateGetThreadStartAddress(Thread));
+			DBGKM_FORMAT_API_MSG(m, DbgKmCreateThreadApi, sizeof(*CreateThreadArgs));
+			_This->PrivateDbgkpSendApiMessage(&m, TRUE);
+		}
+	}
 
 	_DbgkCreateThread func = (_DbgkCreateThread)_This->NewDbgkCreateThreadHookInfo->ori_api_address;
 	if (!func)
@@ -1875,69 +1881,66 @@ VOID NTAPI NewFunc::NewDbgkMapViewOfSection(
 
 	PAGED_CODE();
 
+
 	if (KeGetPreviousMode() == KernelMode)
 	{
 		return;
 	}
 
-	DebugInformation* x;
-	PLIST_ENTRY pEntry = _This->debugLinkListHead.Blink;
-	do
+	HANDLE temp_pid = PsGetCurrentProcessId();
+	DebugInformation* debugInfo = _This->findDebugInfoByProcessId(temp_pid, temp_pid);
+
+	if (debugInfo != NULL && debugInfo->TargetProcessId == temp_pid)
 	{
-		x = CONTAINING_RECORD(pEntry, DebugInformation, ListEntry);
-	//for (auto x : _This->_DebugInfomationVector)
-	//{
-		if (x->TargetProcessId == PsGetCurrentProcessId())
+		PTEB temp_teb = (PTEB)PsGetThreadTeb(PsGetCurrentThread());
+		if (temp_teb == nullptr)
 		{
-			PTEB temp_teb = (PTEB)PsGetThreadTeb(PsGetCurrentThread());
-			if (temp_teb == nullptr)
-			{
-				break;
-			}
+			goto origin_func;
+		}
 
-			NTSTATUS status = _This->DbgkpSuppressDbgMsg(temp_teb);
-			if (!NT_SUCCESS(status))
-			{
-				break;
-			}
+		NTSTATUS status = _This->DbgkpSuppressDbgMsg(temp_teb);
+		if (!NT_SUCCESS(status))
+		{
+			goto origin_func;
+		}
 
-			LoadDllArgs = &m.u.LoadDll;
-			LoadDllArgs->FileHandle = _This->DbgkpSectionToFileHandle(SectionObject);
-			LoadDllArgs->BaseOfDll = BaseAddress;
+		LoadDllArgs = &m.u.LoadDll;
+		LoadDllArgs->FileHandle = _This->DbgkpSectionToFileHandle(SectionObject);
+		LoadDllArgs->BaseOfDll = BaseAddress;
+		LoadDllArgs->DebugInfoFileOffset = 0;
+		LoadDllArgs->DebugInfoSize = 0;
+
+
+		LoadDllArgs->NamePointer = temp_teb->NtTib.ArbitraryUserPointer;
+
+		__try
+		{
+			NtHeaders = RtlImageNtHeader(BaseAddress);
+			if (NtHeaders)
+			{
+				LoadDllArgs->DebugInfoFileOffset = NtHeaders->FileHeader.PointerToSymbolTable;
+				LoadDllArgs->DebugInfoSize = NtHeaders->FileHeader.NumberOfSymbols;
+			}
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
 			LoadDllArgs->DebugInfoFileOffset = 0;
 			LoadDllArgs->DebugInfoSize = 0;
-
-
-			LoadDllArgs->NamePointer = temp_teb->NtTib.ArbitraryUserPointer;
-
-			__try
-			{
-				NtHeaders = RtlImageNtHeader(BaseAddress);
-				if (NtHeaders)
-				{
-					LoadDllArgs->DebugInfoFileOffset = NtHeaders->FileHeader.PointerToSymbolTable;
-					LoadDllArgs->DebugInfoSize = NtHeaders->FileHeader.NumberOfSymbols;
-				}
-			}
-			__except (EXCEPTION_EXECUTE_HANDLER)
-			{
-				LoadDllArgs->DebugInfoFileOffset = 0;
-				LoadDllArgs->DebugInfoSize = 0;
-			}
-
-			DBGKM_FORMAT_API_MSG(m, DbgKmLoadDllApi, sizeof(*LoadDllArgs));
-
-			_This->PrivateDbgkpSendApiMessage(&m, TRUE);
-			if (LoadDllArgs->FileHandle != NULL)
-			{
-				ObCloseHandle(LoadDllArgs->FileHandle, KernelMode);
-			}
-			return;//以达到目的不继续往下执行了 继续执行也是直接被返回来
 		}
-	//}
-		pEntry = pEntry->Blink;
-	} while (pEntry->Blink != &_This->debugLinkListHead);
 
+		DBGKM_FORMAT_API_MSG(m, DbgKmLoadDllApi, sizeof(*LoadDllArgs));
+
+		_This->PrivateDbgkpSendApiMessage(&m, TRUE);
+		if (LoadDllArgs->FileHandle != NULL)
+		{
+			ObCloseHandle(LoadDllArgs->FileHandle, KernelMode);
+		}
+
+		return;//以达到目的不继续往下执行了 继续执行也是直接被返回来
+	}
+
+
+	origin_func:
 	_DbgkMapViewOfSection func = (_DbgkMapViewOfSection)_This->NewDbgkMapViewOfSectionHookInfo->ori_api_address;
 	if (!func)
 	{
@@ -1967,26 +1970,20 @@ VOID NTAPI r0_newfunc::NewDbgkUnMapViewOfSection(IN PVOID BaseAddress)
 		return;//直接就判断了 别往下走了
 	}
 
-	DebugInformation* x;
-	PLIST_ENTRY pEntry = _This->debugLinkListHead.Blink;
-	do
-	{
-		x = CONTAINING_RECORD(pEntry, DebugInformation, ListEntry);
-	//for (auto x : _This->_DebugInfomationVector)
-	//{
-		if (x->TargetProcessId == PsGetCurrentProcessId())
-		{
-			//同上忽略PS_CROSS_THREAD_FLAGS_HIDEFROMDBG
-			UnloadDllArgs = &m.u.UnloadDll;
-			UnloadDllArgs->BaseAddress = BaseAddress;
-			DBGKM_FORMAT_API_MSG(m, DbgKmUnloadDllApi, sizeof(*UnloadDllArgs));
-			_This->PrivateDbgkpSendApiMessage(&m, TRUE);
-			return;//同上返回
-		}
-	//}
-		pEntry = pEntry->Blink;
-	} while (pEntry->Blink != &_This->debugLinkListHead);
+	HANDLE temp_pid = PsGetCurrentProcessId();
+	DebugInformation* debugInfo = _This->findDebugInfoByProcessId(temp_pid, temp_pid);
 
+	if (debugInfo != NULL && debugInfo->TargetProcessId == temp_pid)
+	{
+		//同上忽略PS_CROSS_THREAD_FLAGS_HIDEFROMDBG
+		UnloadDllArgs = &m.u.UnloadDll;
+		UnloadDllArgs->BaseAddress = BaseAddress;
+		DBGKM_FORMAT_API_MSG(m, DbgKmUnloadDllApi, sizeof(*UnloadDllArgs));
+		_This->PrivateDbgkpSendApiMessage(&m, TRUE);
+
+		return;//同上返回
+	}
+	
 	_DbgkUnMapViewOfSection func = (_DbgkUnMapViewOfSection)_This->NewDbgkUnMapViewOfSectionHookInfo->ori_api_address;
 	if (!func)
 	{
@@ -2039,46 +2036,37 @@ NTSTATUS NTAPI r0_newfunc::NewNtCreateUserProcess(
 		CreateInfo,
 		AttributeList);
 
-	if (NT_SUCCESS(status) && ProcessHandle != nullptr)
+	HANDLE temp_pid = PsGetCurrentProcessId();
+	DebugInformation* debugInfo = _This->findDebugInfoByProcessId(temp_pid, temp_pid);
+
+	if (debugInfo != NULL && debugInfo->SourceProcessId == temp_pid)
 	{
-		DebugInformation* x;
-		PLIST_ENTRY pEntry = _This->debugLinkListHead.Blink;
-		do
+		//PspCreateProcess太难重写了 搞点偷懒的东西进去算了
+		//最偷懒的方式是不让他createprocess 强制atttach.
+
+		//目标成功捕获 发起进程和创建debugobj是同一个进程
+		//只是查询下 就怕有注册回调打不开 就别搞这种东西恶心东西了
+		PEPROCESS temp_process = nullptr;
+		status = ObReferenceObjectByHandle(*ProcessHandle, 0x0400, *PsProcessType, KeGetPreviousMode(), (void**)&temp_process, NULL);
+		if (!NT_SUCCESS(status))
 		{
-			x = CONTAINING_RECORD(pEntry, DebugInformation, ListEntry);
-		//for (auto x : _This->_DebugInfomationVector)
-		//{
-			if (x->SourceProcessId == PsGetCurrentProcessId())
-			{
-				//PspCreateProcess太难重写了 搞点偷懒的东西进去算了
-				//最偷懒的方式是不让他createprocess 强制atttach.
-
-				//目标成功捕获 发起进程和创建debugobj是同一个进程
-				//只是查询下 就怕有注册回调打不开 就别搞这种东西恶心东西了
-				PEPROCESS temp_process = nullptr;
-				status = ObReferenceObjectByHandle(*ProcessHandle, 0x0400, *PsProcessType, KeGetPreviousMode(), (void**)&temp_process, NULL);
-				if (!NT_SUCCESS(status))
-				{
-					return status;//这肯定有人在搞鬼 那没办法 要不就Int3大家一起死吧
-				}
-				//设置目标ID为后面的转发做匹配.
-				HANDLE target_pid = PsGetProcessId(temp_process);
-				x->TargetProcessId = target_pid;
+			return status;//这肯定有人在搞鬼 那没办法 要不就Int3大家一起死吧
+		}
+		//设置目标ID为后面的转发做匹配.
+		HANDLE target_pid = PsGetProcessId(temp_process);
+		debugInfo->TargetProcessId = target_pid;
 
 
-				//干掉dbgport
-				//干掉PEB
-				//省略DbgkClearProcessDebugObject后面的obj和event清理 那东西不能清 清了我也用不了了
-				*_This->PrivateGetProcessDebugPort(temp_process) = 0;
-				//DbgkpMarkProcessPeb自带KeStackAttachProcess
-				_This->DbgkpMarkProcessPeb(temp_process);
-				//win7下DbgkpMarkProcessPeb无大变化
-				//debugobj和hanlde都已经到手 prot和peb也清理完成 可以放过去了
-				return status;
-			}
-		//}
-			pEntry = pEntry->Blink;
-		} while (pEntry->Blink != &_This->debugLinkListHead);
+		//干掉dbgport
+		//干掉PEB
+		//省略DbgkClearProcessDebugObject后面的obj和event清理 那东西不能清 清了我也用不了了
+		*_This->PrivateGetProcessDebugPort(temp_process) = 0;
+		//DbgkpMarkProcessPeb自带KeStackAttachProcess
+		_This->DbgkpMarkProcessPeb(temp_process);
+		//win7下DbgkpMarkProcessPeb无大变化
+		//debugobj和hanlde都已经到手 prot和peb也清理完成 可以放过去了
+
+		return status;
 	}
 
 	//不是目标进程 直接放过

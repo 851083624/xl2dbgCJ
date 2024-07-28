@@ -216,7 +216,7 @@ int main(int paramCount,char** param)
 
     cout << "DebugLoop2 addr:" << hex << DebugLoop2 << endl;
     //TestDebugger();
-    DebugLoop2(dwProcessID);
+    if (hModule != NULL) DebugLoop2(dwProcessID);
     //system("pause");
 
     b = FreeLibrary(hModule);
