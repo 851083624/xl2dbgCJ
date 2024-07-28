@@ -102,7 +102,7 @@ VOID r0_newfunc::init(ULONG64 ntos_base_addr)
 
 	//__debugbreak();
 
-	//ExInitializeFastMutex(&KiGenericCallDpcMutex);
+	ExInitializeFastMutex(&KiGenericCallDpcMutex);
 
 }
 
@@ -110,12 +110,12 @@ void r0_newfunc::startHook()
 {
 	if (hooked) return;
 
-	NewKiDispatchExceptionHookInfo = hkEngin->hook(KiDispatchException, NewKiDispatchException);
 	NewDbgkForwardExceptionHookInfo = hkEngin->hook(DbgkForwardException, NewDbgkForwardException);
 	NewDbgkCreateThreadHookInfo = hkEngin->hook(DbgkCreateThread, NewDbgkCreateThread);
 	NewDbgkMapViewOfSectionHookInfo = hkEngin->hook(DbgkMapViewOfSection, NewDbgkMapViewOfSection);
 	NewDbgkUnMapViewOfSectionHookInfo = hkEngin->hook(DbgkUnMapViewOfSection, NewDbgkUnMapViewOfSection);
-	NewNtCreateUserProcessHookInfo = hkEngin->hook(NtCreateUserProcess, NewNtCreateUserProcess);
+	//NewNtCreateUserProcessHookInfo = hkEngin->hook(NtCreateUserProcess, NewNtCreateUserProcess);
+	//NewKiDispatchExceptionHookInfo = hkEngin->hook(KiDispatchException, NewKiDispatchException);
 	hooked = true;
 	DbgPrint("[xl2kerneldbg] hook open...\n");
 }
@@ -998,7 +998,7 @@ Return Value:
 			//
 			GlobalHeld = TRUE;
 
-			//ExAcquireFastMutex(&DbgkpProcessDebugPortMutex);
+			ExAcquireFastMutex(&KiGenericCallDpcMutex);
 
 			//
 			// If the port has been set then exit now.
@@ -1031,7 +1031,7 @@ Return Value:
 				//Process->DebugPort = NULL;
 				//*(ULONG64*)((ULONG64)Process + 0x1f0) = (ULONG64)0;
 
-				//ExReleaseFastMutex(&DbgkpProcessDebugPortMutex);
+				ExReleaseFastMutex(&KiGenericCallDpcMutex);
 
 				GlobalHeld = FALSE;
 
@@ -1131,9 +1131,9 @@ Return Value:
 
 	ExReleaseFastMutex(&DebugObject->Mutex);
 
-	//if (GlobalHeld) {
-	//	ExReleaseFastMutex(&DbgkpProcessDebugPortMutex);
-	//}
+	if (GlobalHeld) {
+		ExReleaseFastMutex(&KiGenericCallDpcMutex);
+	}
 
 	if (LastThread != NULL) {
 		ObDereferenceObject(LastThread);
@@ -1204,7 +1204,7 @@ Return Value:
 		DebugEvent = &StaticDebugEvent;
 		DebugEvent->Flags = Flags;
 
-		//ExAcquireFastMutex(&DbgkpProcessDebugPortMutex);
+		ExAcquireFastMutex(&KiGenericCallDpcMutex);
 		//DebugObject = Process->DebugPort;
 
 		HANDLE cur_pid = PsGetCurrentProcessId();
@@ -1272,7 +1272,7 @@ Return Value:
 
 
 	if ((Flags & DEBUG_EVENT_NOWAIT) == 0) {
-		//ExReleaseFastMutex(&DbgkpProcessDebugPortMutex);
+		ExReleaseFastMutex(&KiGenericCallDpcMutex);
 
 		if (NT_SUCCESS(Status)) {
 			KeWaitForSingleObject(&DebugEvent->ContinueEvent,
