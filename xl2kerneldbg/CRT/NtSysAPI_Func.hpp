@@ -1217,6 +1217,13 @@ typedef NTSTATUS(NTAPI* _NtTerminateThread)(
 typedef VOID(NTAPI* _DbgkpWakeTarget)(
 	IN PDEBUG_EVENT DebugEvent);
 
+typedef NTSTATUS (NTAPI* _DbgkpQueueMessage)(
+	IN PEPROCESS Process,
+	IN PETHREAD Thread,
+	IN OUT PDBGKM_APIMSG ApiMsg,
+	IN ULONG Flags,
+	IN PDEBUG_OBJECT TargetDebugObject);
+
 typedef NTSTATUS(NTAPI* _PsResumeThread)(
 	IN PETHREAD Thread,
 	OUT PULONG PreviousSuspendCount OPTIONAL);

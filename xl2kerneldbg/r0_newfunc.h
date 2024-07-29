@@ -140,9 +140,11 @@ public:
 private:
     LIST_ENTRY debugLinkListHead = {0};
 	POBJECT_TYPE* _DbgkDebugObjectType = nullptr;
+	FAST_MUTEX* p_DbgkpProcessDebugPortMutex;
 	bool hooked = false;
 	PVOID _PsSystemDllBase = nullptr;
 	FAST_MUTEX KiGenericCallDpcMutex;
+	FAST_MUTEX KiGenericCallDpcMutex2;
 private:
 	bool IS_SYSTEM_THREAD(PETHREAD Thread)
 	{
@@ -221,6 +223,7 @@ private:
 	
 	_NtCreateDebugObject _oriNtCreateDebugObject = nullptr;
 	_NtDebugActiveProcess _oriNtDebugActiveProcess = nullptr;
+	_DbgkpQueueMessage _oriDbgkpQueueMessage = nullptr;
 };
 
 #define ProbeForWriteHandle(Address) {                                       \

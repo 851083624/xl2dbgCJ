@@ -152,8 +152,14 @@ int main(int paramCount,char** param)
     {
 
         const char* processName = "ConsDemo20240706.exe";
+        const char* processName2 = "mengling-x86_64.exe";
+        const char* zzName = processName;
 
         dwProcessID = GetPIDForProcess(processName);
+        if (dwProcessID == 0) {
+            dwProcessID = GetPIDForProcess(processName2);
+            zzName = processName2;
+        }
         if (dwProcessID == 0)
         {
             //cout << processName << "  find pid fail!" << endl;
@@ -165,7 +171,7 @@ int main(int paramCount,char** param)
             if (_stricmp(instr, "q") == 0) return 0;
             dwProcessID = atoi(instr);
         } else {
-            cout << processName << "  find pid ok:" << dwProcessID << endl;
+            cout << zzName << "  find pid ok:" << dwProcessID << endl;
             system("pause");
         }
         

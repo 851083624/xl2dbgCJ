@@ -62,6 +62,10 @@ VOID r0_newfunc::init(ULONG64 ntos_base_addr)
 			_oriNtCreateDebugObject = (_NtCreateDebugObject)(ntos_base_addr + 0x452180);
 			_oriNtDebugActiveProcess = (_NtDebugActiveProcess)(ntos_base_addr + 0x4C1A40);
 
+			p_DbgkpProcessDebugPortMutex = (FAST_MUTEX*)(ntos_base_addr + 0x275920);
+
+			_oriDbgkpQueueMessage = (_DbgkpQueueMessage)(ntos_base_addr + 0x414990);
+
 			DbgPrint("init sym 7600 \n");
 		}
 
@@ -89,6 +93,10 @@ VOID r0_newfunc::init(ULONG64 ntos_base_addr)
 			_oriNtCreateDebugObject = (_NtCreateDebugObject)(ntos_base_addr + 0x419BB0);
 			_oriNtDebugActiveProcess = (_NtDebugActiveProcess)(ntos_base_addr + 0x4A4930);
 
+			p_DbgkpProcessDebugPortMutex = (FAST_MUTEX*)(ntos_base_addr + 0x271760);
+
+			_oriDbgkpQueueMessage = (_DbgkpQueueMessage)(ntos_base_addr + 0x3DC610);
+
 			DbgPrint("init sym 7601 \n");
 		}
 	}
@@ -102,7 +110,9 @@ VOID r0_newfunc::init(ULONG64 ntos_base_addr)
 
 	//__debugbreak();
 
-	ExInitializeFastMutex(&KiGenericCallDpcMutex);
+	//ExInitializeFastMutex(&KiGenericCallDpcMutex);
+	//ExInitializeFastMutex(&KiGenericCallDpcMutex2);
+
 
 }
 
@@ -114,6 +124,7 @@ void r0_newfunc::startHook()
 	NewDbgkCreateThreadHookInfo = hkEngin->hook(DbgkCreateThread, NewDbgkCreateThread);
 	NewDbgkMapViewOfSectionHookInfo = hkEngin->hook(DbgkMapViewOfSection, NewDbgkMapViewOfSection);
 	NewDbgkUnMapViewOfSectionHookInfo = hkEngin->hook(DbgkUnMapViewOfSection, NewDbgkUnMapViewOfSection);
+	// 
 	//NewNtCreateUserProcessHookInfo = hkEngin->hook(NtCreateUserProcess, NewNtCreateUserProcess);
 	//NewKiDispatchExceptionHookInfo = hkEngin->hook(KiDispatchException, NewKiDispatchException);
 	hooked = true;
@@ -620,7 +631,7 @@ DebugInformation* r0_newfunc::findDebugInfoByProcessId(HANDLE SourceProcessId, H
 		pEntry = pEntry->Blink;
 	} while (pEntry->Blink != &debugLinkListHead);
 
-	DbgPrint("[testxl2dbg] findDebugInfoByProcessId fail SourceProcessId:%d, TargetProcessId:%d\n", SourceProcessId, TargetProcessId);
+	//DbgPrint("[testxl2dbg] findDebugInfoByProcessId fail SourceProcessId:%d, TargetProcessId:%d\n", SourceProcessId, TargetProcessId);
 	return nullptr;
 }
 
@@ -720,16 +731,16 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpPostFakeProcessCreateMessages(
 
 	Status = PrivateDbgkpPostFakeThreadMessages(Process, DebugObject, NULL, &Thread, &LastThread);
 
-	if (NT_SUCCESS(Status)) {
-		Status = PrivateDbgkpPostFakeModuleMessages(Process, Thread, DebugObject);
-		if (!NT_SUCCESS(Status)) {
-			ObDereferenceObject(LastThread);
-			LastThread = NULL;
-		}
-		ObDereferenceObject(Thread);
-	} else {
-		LastThread = NULL;
-	}
+	//if (NT_SUCCESS(Status)) {
+	//	Status = PrivateDbgkpPostFakeModuleMessages(Process, Thread, DebugObject);
+	//	if (!NT_SUCCESS(Status)) {
+	//		ObDereferenceObject(LastThread);
+	//		LastThread = NULL;
+	//	}
+	//	ObDereferenceObject(Thread);
+	//} else {
+	//	LastThread = NULL;
+	//}
 	
 	KeUnstackDetachProcess(&ApcState);
 
@@ -780,6 +791,8 @@ Return Value:
 
 	Status = STATUS_UNSUCCESSFUL;
 
+	//bool exOnece = false;
+
 	if (StartThread != NULL) {
 		First = FALSE;
 		FirstThread = StartThread;
@@ -793,6 +806,9 @@ Return Value:
 	for (Thread = StartThread;
 		Thread != NULL;
 		Thread = PsGetNextProcessThread(Process, Thread)) {
+
+		//if (exOnece) break;
+		//exOnece = true;
 
 		Flags = DEBUG_EVENT_NOWAIT;
 
@@ -876,21 +892,43 @@ Return Value:
 			ApiMsg.ApiNumber = DbgKmCreateThreadApi;
 			ApiMsg.u.CreateThread.StartAddress = PrivateGetThreadStartAddress(Thread);//Thread->StartAddress;
 		}
+
+		//Flags &= ~DEBUG_EVENT_RELEASE;
+		//__debugbreak();
+
 		Status = PrivateDbgkpQueueMessage(Process,
 			Thread,
 			&ApiMsg,
 			Flags,
 			DebugObject);
+		
+		// DbgkpSetProcessDebugObject所做事情
+		//ObReferenceObject(DebugObject);
+		//LIST_ENTRY* Entry = DebugObject->EventList.Flink;
+		//DEBUG_EVENT* DebugEvent = CONTAINING_RECORD(Entry, DEBUG_EVENT, EventList);
+		//DebugEvent->Flags &= ~DEBUG_EVENT_INACTIVE;
+		//KeSetEvent(&DebugObject->EventsPresent, 0, FALSE);
+		////DebugEvent->BackoutThread = NULL;
+		//PS_SET_BITS(PrivateGetThreadCrossThreadFlagsPoint(Thread),		// &Thread->CrossThreadFlags,
+		//	PS_CROSS_THREAD_FLAGS_SKIP_CREATION_MSG);
+		//if (DebugEvent->Flags & DEBUG_EVENT_RELEASE) {
+		//	DebugEvent->Flags &= ~DEBUG_EVENT_RELEASE;
+		//	ExReleaseRundownProtection(PrivateGetThreadRundownProtect(Thread));	// &Thread->RundownProtect
+		//}
+
 		//if (Flags & DEBUG_EVENT_SUSPEND) {
 		//	PsResumeThread(Thread, NULL);
 		//}
 		//if (Flags & DEBUG_EVENT_RELEASE) {
 		//	ExReleaseRundownProtection(PrivateGetThreadRundownProtect(Thread));	// &Thread->RundownProtect
 		//}
-		if (ApiMsg.ApiNumber == DbgKmCreateProcessApi && ApiMsg.u.CreateProcessInfo.FileHandle != NULL) {
-			ObCloseHandle(ApiMsg.u.CreateProcessInfo.FileHandle, KernelMode);
-		}
+		//if (ApiMsg.ApiNumber == DbgKmCreateProcessApi && ApiMsg.u.CreateProcessInfo.FileHandle != NULL) {
+		//	ObCloseHandle(ApiMsg.u.CreateProcessInfo.FileHandle, KernelMode);
+		//}
+
 		//Status = STATUS_SUCCESS;
+		//ObDereferenceObject(Process);
+		//ObDereferenceObject(Thread);
 		if (!NT_SUCCESS(Status)) {
 			if (Flags & DEBUG_EVENT_SUSPEND) {
 				PsResumeThread(Thread, NULL);
@@ -911,7 +949,6 @@ Return Value:
 			FirstThread = Thread;
 		}
 	}
-
 
 	if (!NT_SUCCESS(Status)) {
 		if (FirstThread) {
@@ -998,7 +1035,7 @@ Return Value:
 			//
 			GlobalHeld = TRUE;
 
-			ExAcquireFastMutex(&KiGenericCallDpcMutex);
+			ExAcquireFastMutex(p_DbgkpProcessDebugPortMutex);
 
 			//
 			// If the port has been set then exit now.
@@ -1031,7 +1068,7 @@ Return Value:
 				//Process->DebugPort = NULL;
 				//*(ULONG64*)((ULONG64)Process + 0x1f0) = (ULONG64)0;
 
-				ExReleaseFastMutex(&KiGenericCallDpcMutex);
+				ExReleaseFastMutex(p_DbgkpProcessDebugPortMutex);
 
 				GlobalHeld = FALSE;
 
@@ -1132,7 +1169,7 @@ Return Value:
 	ExReleaseFastMutex(&DebugObject->Mutex);
 
 	if (GlobalHeld) {
-		ExReleaseFastMutex(&KiGenericCallDpcMutex);
+		ExReleaseFastMutex(p_DbgkpProcessDebugPortMutex);
 	}
 
 	if (LastThread != NULL) {
@@ -1179,6 +1216,9 @@ Return Value:
 --*/
 {
 
+	//return _This->_oriDbgkpQueueMessage(Process, Thread, ApiMsg, Flags, TargetDebugObject);
+
+	/////////////////////////////////////////////////////////////////////////////////////////
 
 	PDEBUG_EVENT DebugEvent;
 	DEBUG_EVENT StaticDebugEvent;
@@ -1204,7 +1244,7 @@ Return Value:
 		DebugEvent = &StaticDebugEvent;
 		DebugEvent->Flags = Flags;
 
-		ExAcquireFastMutex(&KiGenericCallDpcMutex);
+		ExAcquireFastMutex(p_DbgkpProcessDebugPortMutex);
 		//DebugObject = Process->DebugPort;
 
 		HANDLE cur_pid = PsGetCurrentProcessId();
@@ -1272,7 +1312,7 @@ Return Value:
 
 
 	if ((Flags & DEBUG_EVENT_NOWAIT) == 0) {
-		ExReleaseFastMutex(&KiGenericCallDpcMutex);
+		ExReleaseFastMutex(p_DbgkpProcessDebugPortMutex);
 
 		if (NT_SUCCESS(Status)) {
 			KeWaitForSingleObject(&DebugEvent->ContinueEvent,
@@ -1390,7 +1430,7 @@ Return Value:
 					&ApiMsg,
 					DEBUG_EVENT_NOWAIT,
 					DebugObject);
-				if (ApiMsg.u.LoadDll.FileHandle != NULL) {	// !NT_SUCCESS(Status) && 
+				if (!NT_SUCCESS(Status) && ApiMsg.u.LoadDll.FileHandle != NULL) {	// 
 					ObCloseHandle(ApiMsg.u.LoadDll.FileHandle, KernelMode);
 				}
 
@@ -1471,7 +1511,7 @@ Return Value:
 						&ApiMsg,
 						DEBUG_EVENT_NOWAIT,
 						DebugObject);
-					if (ApiMsg.u.LoadDll.FileHandle != NULL) { // !NT_SUCCESS(Status) && 
+					if (!NT_SUCCESS(Status) && ApiMsg.u.LoadDll.FileHandle != NULL) { // 
 						ObCloseHandle(ApiMsg.u.LoadDll.FileHandle, KernelMode);
 					}
 				}
@@ -1492,13 +1532,13 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpSendApiMessage(
 	IN OUT PDBGKM_APIMSG ApiMsg,
 	IN BOOLEAN SuspendProcess)
 {
-	DbgPrint("[xl2kerneldbg] call start PrivateDbgkpSendApiMessage...\n");
-	DbgPrint("ApiMsg:%llx\n", ApiMsg);
-	DbgPrint("ApiMsg->ApiNumber:%x\n", ApiMsg->ApiNumber);
-	DbgPrint("ApiMsg->ReturnedStatus:%x\n", ApiMsg->ReturnedStatus);
-	DbgPrint("SuspendProcess:%x\n", SuspendProcess);
-	DbgPrint("ApiMsg->u.CreateThread.StartAddress:%llx\n", ApiMsg->u.CreateThread.StartAddress);
-	DbgPrint("---------------\n");
+	//DbgPrint("[xl2kerneldbg] call start PrivateDbgkpSendApiMessage...\n");
+	//DbgPrint("ApiMsg:%llx\n", ApiMsg);
+	//DbgPrint("ApiMsg->ApiNumber:%x\n", ApiMsg->ApiNumber);
+	//DbgPrint("ApiMsg->ReturnedStatus:%x\n", ApiMsg->ReturnedStatus);
+	//DbgPrint("SuspendProcess:%x\n", SuspendProcess);
+	//DbgPrint("ApiMsg->u.CreateThread.StartAddress:%llx\n", ApiMsg->u.CreateThread.StartAddress);
+	//DbgPrint("---------------\n");
 
 	NTSTATUS st;
 	PEPROCESS Process;
@@ -1511,12 +1551,12 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpSendApiMessage(
 	Process = PsGetCurrentProcess();
 	PS_SET_BITS(PrivateGetProcessFlags(Process), PS_PROCESS_FLAGS_CREATE_REPORTED);
 	st = PrivateDbgkpQueueMessage(Process, PsGetCurrentThread(), ApiMsg, 0, NULL);
-	if (ApiMsg->ApiNumber == DbgKmCreateProcessApi && ApiMsg->u.CreateProcessInfo.FileHandle != NULL) {
-		ObCloseHandle(ApiMsg->u.CreateProcessInfo.FileHandle, KernelMode);
-	}
-	if (ApiMsg->u.LoadDll.FileHandle != NULL) {
-		ObCloseHandle(ApiMsg->u.LoadDll.FileHandle, KernelMode);
-	}
+	//if (ApiMsg->ApiNumber == DbgKmCreateProcessApi && ApiMsg->u.CreateProcessInfo.FileHandle != NULL) {
+	//	ObCloseHandle(ApiMsg->u.CreateProcessInfo.FileHandle, KernelMode);
+	//}
+	//if (ApiMsg->u.LoadDll.FileHandle != NULL) {
+	//	ObCloseHandle(ApiMsg->u.LoadDll.FileHandle, KernelMode);
+	//}
 	ZwFlushInstructionCache(NtCurrentProcess(), NULL, 0);
 	if (SuspendProcess)
 	{
@@ -1636,6 +1676,7 @@ BOOLEAN NTAPI r0_newfunc::NewDbgkForwardException(
 	DBGKM_APIMSG m;
 	NTSTATUS st;
 
+
 	HANDLE temp_pid = PsGetCurrentProcessId();
 	DebugInformation* debugInfo = _This->findDebugInfoByProcessId(temp_pid, temp_pid);
 
@@ -1666,7 +1707,6 @@ BOOLEAN NTAPI r0_newfunc::NewDbgkForwardException(
 		args->FirstChance = !SecondChance;
 
 		st = _This->PrivateDbgkpSendApiMessage(&m, DebugException);
-
 
 		if (!NT_SUCCESS(st) || ((DebugException) &&
 			(m.ReturnedStatus == DBG_EXCEPTION_NOT_HANDLED || !NT_SUCCESS(m.ReturnedStatus))))
@@ -1841,10 +1881,10 @@ VOID NTAPI r0_newfunc::NewDbgkCreateThread(PETHREAD Thread, PVOID StartAddress)
 			CreateThreadArgs = &m.u.CreateThread;
 			CreateThreadArgs->SubSystemKey = 0;
 			CreateThreadArgs->StartAddress = *(void**)(_This->PrivateGetThreadStartAddress(Thread));
-			DbgPrint("111111 &CreateThreadArgs->StartAddress:%llx\n", &CreateThreadArgs->StartAddress);
-			DbgPrint("111111 CreateThreadArgs->StartAddress:%llx\n", CreateThreadArgs->StartAddress);
-			DbgPrint("111111 Thread:%llx\n", Thread);
-			DbgPrint("111111 _This->PrivateGetThreadStartAddress(Thread):%llx\n", _This->PrivateGetThreadStartAddress(Thread));
+			//DbgPrint("111111 &CreateThreadArgs->StartAddress:%llx\n", &CreateThreadArgs->StartAddress);
+			//DbgPrint("111111 CreateThreadArgs->StartAddress:%llx\n", CreateThreadArgs->StartAddress);
+			//DbgPrint("111111 Thread:%llx\n", Thread);
+			//DbgPrint("111111 _This->PrivateGetThreadStartAddress(Thread):%llx\n", _This->PrivateGetThreadStartAddress(Thread));
 			DBGKM_FORMAT_API_MSG(m, DbgKmCreateThreadApi, sizeof(*CreateThreadArgs));
 			_This->PrivateDbgkpSendApiMessage(&m, TRUE);
 		}
