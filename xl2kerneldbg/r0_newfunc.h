@@ -49,7 +49,7 @@ private:
 		IN PETHREAD StartThread,
 		OUT PETHREAD* pFirstThread,
 		OUT PETHREAD* pLastThread);
-	NTSTATUS NTAPI PrivateDbgkpQueueMessage(
+	static NTSTATUS NTAPI PrivateDbgkpQueueMessage(
 		IN PEPROCESS Process,
 		IN PETHREAD Thread,
 		IN OUT PDBGKM_APIMSG ApiMsg,
@@ -134,6 +134,7 @@ public://HOOKº¯Êý
 		hook_information* NewDbgkCreateThreadHookInfo = nullptr;
 		hook_information* NewDbgkMapViewOfSectionHookInfo = nullptr;
 		hook_information* NewDbgkUnMapViewOfSectionHookInfo = nullptr;
+		hook_information* NewDbgkpQueueMessageHookInfo = nullptr;
 		hook_information* NewNtCreateUserProcessHookInfo = nullptr;
 public:
 	static r0_newfunc* _This;
@@ -224,6 +225,7 @@ private:
 	_NtCreateDebugObject _oriNtCreateDebugObject = nullptr;
 	_NtDebugActiveProcess _oriNtDebugActiveProcess = nullptr;
 	_DbgkpQueueMessage _oriDbgkpQueueMessage = nullptr;
+	_DbgkpPostFakeProcessCreateMessages _oriDbgkpPostFakeProcessCreateMessages = nullptr;
 };
 
 #define ProbeForWriteHandle(Address) {                                       \

@@ -65,6 +65,7 @@ VOID r0_newfunc::init(ULONG64 ntos_base_addr)
 			p_DbgkpProcessDebugPortMutex = (FAST_MUTEX*)(ntos_base_addr + 0x275920);
 
 			_oriDbgkpQueueMessage = (_DbgkpQueueMessage)(ntos_base_addr + 0x414990);
+			_oriDbgkpPostFakeProcessCreateMessages = (_DbgkpPostFakeProcessCreateMessages)(ntos_base_addr + 0x4C12E0);
 
 			DbgPrint("init sym 7600 \n");
 		}
@@ -96,6 +97,7 @@ VOID r0_newfunc::init(ULONG64 ntos_base_addr)
 			p_DbgkpProcessDebugPortMutex = (FAST_MUTEX*)(ntos_base_addr + 0x271760);
 
 			_oriDbgkpQueueMessage = (_DbgkpQueueMessage)(ntos_base_addr + 0x3DC610);
+			_oriDbgkpPostFakeProcessCreateMessages = (_DbgkpPostFakeProcessCreateMessages)(ntos_base_addr + 0x4A41E0);
 
 			DbgPrint("init sym 7601 \n");
 		}
@@ -124,6 +126,7 @@ void r0_newfunc::startHook()
 	NewDbgkCreateThreadHookInfo = hkEngin->hook(DbgkCreateThread, NewDbgkCreateThread);
 	NewDbgkMapViewOfSectionHookInfo = hkEngin->hook(DbgkMapViewOfSection, NewDbgkMapViewOfSection);
 	NewDbgkUnMapViewOfSectionHookInfo = hkEngin->hook(DbgkUnMapViewOfSection, NewDbgkUnMapViewOfSection);
+	NewDbgkpQueueMessageHookInfo = hkEngin->hook(_oriDbgkpQueueMessage, PrivateDbgkpQueueMessage);
 	// 
 	//NewNtCreateUserProcessHookInfo = hkEngin->hook(NtCreateUserProcess, NewNtCreateUserProcess);
 	//NewKiDispatchExceptionHookInfo = hkEngin->hook(KiDispatchException, NewKiDispatchException);
@@ -139,6 +142,7 @@ void r0_newfunc::stopHook()
 	hkEngin->unhook(NewDbgkCreateThreadHookInfo);
 	hkEngin->unhook(NewDbgkMapViewOfSectionHookInfo);
 	hkEngin->unhook(NewDbgkUnMapViewOfSectionHookInfo);
+	hkEngin->unhook(NewDbgkpQueueMessageHookInfo);
 	hkEngin->unhook(NewNtCreateUserProcessHookInfo);
 	hooked = false;
 	DbgPrint("[xl2kerneldbg] hook close...\n");
@@ -720,6 +724,11 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpPostFakeProcessCreateMessages(
 	IN PDEBUG_OBJECT DebugObject,
 	IN PETHREAD* pLastThread)
 {
+
+	return _This->_oriDbgkpPostFakeProcessCreateMessages(Process, DebugObject, pLastThread);
+
+	////////////////////////////////////////////////////////////////////////////
+
 	NTSTATUS Status = STATUS_SUCCESS;
 	PETHREAD LastThread = NULL;
 	KAPC_STATE ApcState;
@@ -731,16 +740,16 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpPostFakeProcessCreateMessages(
 
 	Status = PrivateDbgkpPostFakeThreadMessages(Process, DebugObject, NULL, &Thread, &LastThread);
 
-	//if (NT_SUCCESS(Status)) {
-	//	Status = PrivateDbgkpPostFakeModuleMessages(Process, Thread, DebugObject);
-	//	if (!NT_SUCCESS(Status)) {
-	//		ObDereferenceObject(LastThread);
-	//		LastThread = NULL;
-	//	}
-	//	ObDereferenceObject(Thread);
-	//} else {
-	//	LastThread = NULL;
-	//}
+	if (NT_SUCCESS(Status)) {
+		Status = PrivateDbgkpPostFakeModuleMessages(Process, Thread, DebugObject);
+		if (!NT_SUCCESS(Status)) {
+			ObDereferenceObject(LastThread);
+			LastThread = NULL;
+		}
+		ObDereferenceObject(Thread);
+	} else {
+		LastThread = NULL;
+	}
 	
 	KeUnstackDetachProcess(&ApcState);
 
@@ -1216,7 +1225,15 @@ Return Value:
 --*/
 {
 
-	//return _This->_oriDbgkpQueueMessage(Process, Thread, ApiMsg, Flags, TargetDebugObject);
+	HANDLE cur_pid = PsGetCurrentProcessId();
+	DebugInformation* debugInfo = _This->findDebugInfoByProcessId(cur_pid, cur_pid);
+	if (debugInfo == nullptr)
+	{
+		
+		return _This->_oriDbgkpQueueMessage(Process, Thread, ApiMsg, Flags, TargetDebugObject);
+	}
+
+
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1244,11 +1261,11 @@ Return Value:
 		DebugEvent = &StaticDebugEvent;
 		DebugEvent->Flags = Flags;
 
-		ExAcquireFastMutex(p_DbgkpProcessDebugPortMutex);
+		ExAcquireFastMutex(_This->p_DbgkpProcessDebugPortMutex);
 		//DebugObject = Process->DebugPort;
 
 		HANDLE cur_pid = PsGetCurrentProcessId();
-		DebugInformation* debugInfo = findDebugInfoByProcessId(cur_pid, cur_pid);
+		DebugInformation* debugInfo = _This->findDebugInfoByProcessId(cur_pid, cur_pid);
 		if (debugInfo == nullptr) return STATUS_ABANDONED;
 		DebugObject = debugInfo->DebugObject;
 
@@ -1257,7 +1274,7 @@ Return Value:
 		//
 		if (ApiMsg->ApiNumber == DbgKmCreateThreadApi ||
 			ApiMsg->ApiNumber == DbgKmCreateProcessApi) {
-			if (PrivateGetThreadCrossThreadFlags(Thread) & PS_CROSS_THREAD_FLAGS_SKIP_CREATION_MSG) {	// Thread->CrossThreadFlags
+			if (_This->PrivateGetThreadCrossThreadFlags(Thread) & PS_CROSS_THREAD_FLAGS_SKIP_CREATION_MSG) {	// Thread->CrossThreadFlags
 				DebugObject = NULL;
 			}
 		}
@@ -1267,7 +1284,7 @@ Return Value:
 		//
 		if (ApiMsg->ApiNumber == DbgKmExitThreadApi ||
 			ApiMsg->ApiNumber == DbgKmExitProcessApi) {
-			if (PrivateGetThreadCrossThreadFlags(Thread) & PS_CROSS_THREAD_FLAGS_SKIP_TERMINATION_MSG) {	// Thread->CrossThreadFlags
+			if (_This->PrivateGetThreadCrossThreadFlags(Thread) & PS_CROSS_THREAD_FLAGS_SKIP_TERMINATION_MSG) {	// Thread->CrossThreadFlags
 				DebugObject = NULL;
 			}
 		}
@@ -1312,7 +1329,7 @@ Return Value:
 
 
 	if ((Flags & DEBUG_EVENT_NOWAIT) == 0) {
-		ExReleaseFastMutex(p_DbgkpProcessDebugPortMutex);
+		ExReleaseFastMutex(_This->p_DbgkpProcessDebugPortMutex);
 
 		if (NT_SUCCESS(Status)) {
 			KeWaitForSingleObject(&DebugEvent->ContinueEvent,

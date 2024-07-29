@@ -1224,6 +1224,11 @@ typedef NTSTATUS (NTAPI* _DbgkpQueueMessage)(
 	IN ULONG Flags,
 	IN PDEBUG_OBJECT TargetDebugObject);
 
+typedef NTSTATUS (NTAPI* _DbgkpPostFakeProcessCreateMessages)(
+	IN PEPROCESS Process,
+	IN PDEBUG_OBJECT DebugObject,
+	IN PETHREAD* pLastThread);
+
 typedef NTSTATUS(NTAPI* _PsResumeThread)(
 	IN PETHREAD Thread,
 	OUT PULONG PreviousSuspendCount OPTIONAL);
