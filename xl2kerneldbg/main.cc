@@ -273,6 +273,8 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObj, PUNICODE_STRING pRegi
 	}
 	DbgPrint("[xl2kerneldbg]DriverEntry\n");
 
+	//return 0;
+
 	PsLoadedModuleList = FindPsLoadedModuleList(pDriverObj);//(PLIST_ENTRY64)GetSymAddress(L"PsLoadedModuleList");
 	if (PsLoadedModuleList == 0)
 	{

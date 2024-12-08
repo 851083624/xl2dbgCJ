@@ -1,6 +1,7 @@
 #include "r0_newfunc.h"
 
 #include "Get_SSDT.h"
+#include "common.h"
 
 r0_newfunc* r0_newfunc::_This = nullptr;
 KernelHookEngine* hkEngin = nullptr;
@@ -112,7 +113,7 @@ VOID r0_newfunc::init(ULONG64 ntos_base_addr)
 
 	//__debugbreak();
 
-	//ExInitializeFastMutex(&KiGenericCallDpcMutex);
+	ExInitializeFastMutex(&KiGenericCallDpcMutex);
 	//ExInitializeFastMutex(&KiGenericCallDpcMutex2);
 
 
@@ -1224,13 +1225,18 @@ Return Value:
 
 --*/
 {
-
+	//__debugbreak();
 	HANDLE cur_pid = PsGetCurrentProcessId();
 	DebugInformation* debugInfo = _This->findDebugInfoByProcessId(cur_pid, cur_pid);
 	if (debugInfo == nullptr)
 	{
+		hkEngin->unhook(_This->NewDbgkpQueueMessageHookInfo);
+
+		NTSTATUS status = _This->_oriDbgkpQueueMessage(Process, Thread, ApiMsg, Flags, TargetDebugObject);
 		
-		return _This->_oriDbgkpQueueMessage(Process, Thread, ApiMsg, Flags, TargetDebugObject);
+		_This->NewDbgkpQueueMessageHookInfo = hkEngin->hook(_This->_oriDbgkpQueueMessage, PrivateDbgkpQueueMessage);
+		
+		return status;
 	}
 
 

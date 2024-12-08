@@ -25,40 +25,40 @@ bool hook::loadDriver()
 	char msg[256] = { 0 };
 
 	ScmDrvCtrl* dc = ScmDrvCtrl::getInstance()._This;
-	const char* sysFileName = "xl2kerneldbg.sys";
-	//设置驱动名称
-	char filePath[MAX_PATH] = { 0 };
-	//dc->GetAppPath(filePath);
-	const char* dyPath = "C:\\Users\\Administrator\\Desktop\\xl2dbg\\";
-	memcpy(filePath, dyPath, strlen(dyPath));
-	strcat_s(filePath, sysFileName);
-	cout << "driver file path: " << filePath << endl;
-	//MessageBoxA(0, filePath, 0, 0);
-	dc->m_pSysPath = filePath;
-	dc->m_pDisplayName = "xl2kerneldbg";
-	dc->m_pServiceName = "xl2kerneldbg";
+	//const char* sysFileName = "xl2kerneldbg.sys";
+	////设置驱动名称
+	//char filePath[MAX_PATH] = { 0 };
+	////dc->GetAppPath(filePath);
+	//const char* dyPath = "C:\\Users\\Administrator\\Desktop\\xl2dbg\\";
+	//memcpy(filePath, dyPath, strlen(dyPath));
+	//strcat_s(filePath, sysFileName);
+	//cout << "driver file path: " << filePath << endl;
+	////MessageBoxA(0, filePath, 0, 0);
+	//dc->m_pSysPath = filePath;
+	//dc->m_pDisplayName = "xl2kerneldbg";
+	//dc->m_pServiceName = "xl2kerneldbg";
 	dc->pLinkName = "\\\\.\\xl2kerneldbg";
 
-	//安装并启动驱动
-	b = dc->Install();
-	cout << "driver install b:" << b << ", lastErrCode:" << dc->m_dwLastError << endl;
-	//system("pause");
-	if (!b)
-	{
-	    sprintf_s(msg, "Driver Install fail, code:%x", GetLastError());
-	    MessageBoxA(0, msg, "err", 0);
-		return false;
-	}
-	b = dc->Start();
-	cout << "driver Start b:" << b << ", lastErrCode:" << dc->m_dwLastError << endl;
-	//system("pause");
-	if (!b)
-	{
-	    sprintf_s(msg, "Driver Start fail, code:%x", GetLastError());
-	    MessageBoxA(0, msg, "err", 0);
-		return false;
-	}
-	printf("LoadDriver=%d\n", b);
+	////安装并启动驱动
+	//b = dc->Install();
+	//cout << "driver install b:" << b << ", lastErrCode:" << dc->m_dwLastError << endl;
+	////system("pause");
+	//if (!b)
+	//{
+	//    sprintf_s(msg, "Driver Install fail, code:%x", GetLastError());
+	//    MessageBoxA(0, msg, "err", 0);
+	//	return false;
+	//}
+	//b = dc->Start();
+	//cout << "driver Start b:" << b << ", lastErrCode:" << dc->m_dwLastError << endl;
+	////system("pause");
+	//if (!b)
+	//{
+	//    sprintf_s(msg, "Driver Start fail, code:%x", GetLastError());
+	//    MessageBoxA(0, msg, "err", 0);
+	//	return false;
+	//}
+	//printf("LoadDriver=%d\n", b);
 
 	b = dc->Open();
 	cout << "driver open b:" << b << ", lastErrCode:" << dc->m_dwLastError << endl;
@@ -75,15 +75,15 @@ bool hook::unloadDriver()
 	//system("pause");
 
 
-	b = dc->Stop();
-	cout << "driver stop b:" << b << ", lastErrCode:" << dc->m_dwLastError << endl;
-	//system("pause");
+	//b = dc->Stop();
+	//cout << "driver stop b:" << b << ", lastErrCode:" << dc->m_dwLastError << endl;
+	////system("pause");
 
-	b = dc->Remove();
-	cout << "driver remove b:" << b << ", lastErrCode:" << dc->m_dwLastError << endl;
-	//system("pause");
+	//b = dc->Remove();
+	//cout << "driver remove b:" << b << ", lastErrCode:" << dc->m_dwLastError << endl;
+	////system("pause");
 
-	cout << "unloadDriver called b:" << b << endl;
+	//cout << "unloadDriver called b:" << b << endl;
 
 	return true;
 }
@@ -167,11 +167,18 @@ int hook::startHook()
 		return 18;
 	}
 
-	_Original_DbgUiIssueRemoteBreakin = DetourFindFunction("Ntdll.dll", "DbgUiIssueRemoteBreakin");
-	ret = DetourAttach(&_Original_DbgUiIssueRemoteBreakin, NewDbgUiIssueRemoteBreakin);
+	//_Original_DbgUiIssueRemoteBreakin = DetourFindFunction("Ntdll.dll", "DbgUiIssueRemoteBreakin");
+	//ret = DetourAttach(&_Original_DbgUiIssueRemoteBreakin, NewDbgUiIssueRemoteBreakin);
+	//if (ret != NO_ERROR)
+	//{
+	//	return 23;
+	//}
+
+	_Original_NtRemoveProcessDebug = DetourFindFunction("Ntdll.dll", "NtRemoveProcessDebug");
+	ret = DetourAttach(&_Original_NtRemoveProcessDebug, NewNtRemoveProcessDebug);
 	if (ret != NO_ERROR)
 	{
-		return 23;
+		return 24;
 	}
 
 	ret = DetourTransactionCommit();
@@ -334,6 +341,7 @@ NTSTATUS NTAPI hook::NewNtCreateDebugObject(
 		&temp_message, sizeof(Message_NewNtCreateDebugObject));
 
 	//_DebugObjectHandle = *pDebugObjectHandle;
+	//*pDebugObjectHandle = _DebugObjectHandle;
 
 	cout << "NewNtCreateDebugObject called _DebugObjectHandle:" << hex << _DebugObjectHandle
 		<< ", DesiredAccess:" << hex << DesiredAccess
@@ -450,6 +458,24 @@ NTSTATUS NTAPI hook::NewNtDebugActiveProcess(
 		&temp_message, sizeof(Message_NewNtDebugActiveProcess),
 		&temp_message, sizeof(Message_NewNtDebugActiveProcess));
 #endif // _AMD64_
+
+	ULONG64 funcAddr_DbgUiRemoteBreakin = 0;
+	HMODULE hModule = LoadLibraryA("ntdll");
+	cout << "ntdll hModule:" << hModule << endl;
+	funcAddr_DbgUiRemoteBreakin = (ULONG64)GetProcAddress(hModule, "DbgUiRemoteBreakin");
+	cout << "funcAddr_DbgUiRemoteBreakin:" << hex << funcAddr_DbgUiRemoteBreakin << endl;
+
+	char hkCode[4] = {0xeb,0x31,0x90,0x90};
+	DWORD dwOldProt, dwNewProt;
+	bool b = true;
+	
+	b = VirtualProtectEx(ProcessHandle, (LPVOID)funcAddr_DbgUiRemoteBreakin, 4, PAGE_EXECUTE_READWRITE, &dwOldProt);
+	cout << "VirtualProtectEx 11111  b:" << b << endl;
+	b = WriteProcessMemory(ProcessHandle, (LPVOID)funcAddr_DbgUiRemoteBreakin, hkCode, 4, NULL);
+	cout << "WriteProcessMemory  b:" << b << endl;
+	b = VirtualProtectEx(ProcessHandle, (LPVOID)funcAddr_DbgUiRemoteBreakin, 4, dwOldProt, &dwNewProt);
+	cout << "VirtualProtectEx 22222  b:" << b << endl;
+
 	return status;
 }
 
@@ -457,6 +483,9 @@ NTSTATUS NTAPI hook::NewNtRemoveProcessDebug(
 	IN HANDLE ProcessHandle,
 	IN HANDLE DebugObjectHandle)
 {
+	cout << "called NewNtRemoveProcessDebug return 0" << endl;
+	return 0;
+
 	NTSTATUS status = 0;
 #ifdef _AMD64_
 	Message_NewNtRemoveProcessDebug temp_message = { 0 };

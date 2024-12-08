@@ -28,6 +28,9 @@
     <ClCompile Include="..\..\MLDebug\MLDebugKernel\KernelHookEngine\KernelHookEngine.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="common.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="r0_newfunc.h">
@@ -37,6 +40,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\MLDebug\MLDebugKernel\KernelHookEngine\KernelHookEngine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

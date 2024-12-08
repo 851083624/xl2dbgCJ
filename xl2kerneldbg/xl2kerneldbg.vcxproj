@@ -156,11 +156,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\MLDebug\MLDebugKernel\KernelHookEngine\KernelHookEngine.cc" />
+    <ClCompile Include="common.cc" />
     <ClCompile Include="main.cc" />
     <ClCompile Include="r0_newfunc.cc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\MLDebug\MLDebugKernel\KernelHookEngine\KernelHookEngine.h" />
+    <ClInclude Include="common.h" />
     <ClInclude Include="Get_SSDT.h" />
     <ClInclude Include="r0_newfunc.h" />
   </ItemGroup>

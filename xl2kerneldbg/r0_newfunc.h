@@ -3,6 +3,7 @@
 #include "NativeMessage.h"
 
 #include "./KernelHookEngine/KernelHookEngine.h"
+#include "common.h"
 
 
 struct DebugInformation
