@@ -1282,9 +1282,11 @@ typedef BOOLEAN(NTAPI* _DbgkForwardException)(
 	IN BOOLEAN DebugException,
 	IN BOOLEAN SecondChance);
 
-typedef BOOLEAN(NTAPI* _DbgkpSuspendProcess)(VOID);
+//typedef BOOLEAN(NTAPI* _DbgkpSuspendProcess)(VOID); // WIN7
+typedef BOOLEAN(NTAPI* _DbgkpSuspendProcess)(PEPROCESS Process); // WIN10
 
 typedef BOOLEAN(NTAPI* _KeThawAllThreads)(VOID);
+typedef BOOLEAN(NTAPI* _KeThawProcess)(PEPROCESS Process, BOOL b);
 
 typedef VOID(NTAPI* _DbgkCreateThread)(PETHREAD Thread, PVOID StartAddress);
 
@@ -1358,16 +1360,25 @@ typedef NTSTATUS(NTAPI* _NtCreateDebugObject)(
 #if (NTDDI_VERSION == NTDDI_WIN7)
 #ifdef _AMD64_
 #define NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win7 0x0448
+#define NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win10_1909 0x06e0
 #define NtSysAPI_ETHREAD_RundownProtect_X64_Win7 0x0430
+#define NtSysAPI_ETHREAD_RundownProtect_X64_Win10_1909 0x06c8
 #define NtSysAPI_ETHREAD_StartAddress_X64_Win7 0x0410	// 0x0430
+#define NtSysAPI_ETHREAD_StartAddress_X64_Win10_1909 0x06a0
 #define NtSysAPI_KTHREAD_Timer_X64_Win7 0x00c0
 
 #define NtSysAPI_EPROCESS_Flags_X64_Win7 0x0440
+#define NtSysAPI_EPROCESS_Flags_X64_Win10_1909 0x030c
 #define NtSysAPI_EPROCESS_Wow64Process_X64_Win7 0x0320
+#define NtSysAPI_EPROCESS_Wow64Process_X64_Win10_1909 0x0428
 #define NtSysAPI_EPROCESS_RundownProtect_X64_Win7 0x0178
+#define NtSysAPI_EPROCESS_RundownProtect_X64_Win10_1909 0x0300
 #define NtSysAPI_EPROCESS_SectionObject_X64_Win7 0x0268
+#define NtSysAPI_EPROCESS_SectionObject_X64_Win10_1909 0x03c0
 #define NtSysAPI_EPROCESS_SectionBaseAddress_X64_Win7 0x0270
+#define NtSysAPI_EPROCESS_SectionBaseAddress_X64_Win10_1909 0x03c8
 #define NtSysAPI_EPROCESS_DebugPort_X64_Win7 0x01f0
+#define NtSysAPI_EPROCESS_DebugPort_X64_Win10_1909 0x0420
 
 #define NtSysAPI_KPROCESS_UserTime_X64_Win7 0x00fc
 

@@ -32,77 +32,116 @@ VOID r0_newfunc::init(ULONG64 ntos_base_addr)
 		return;
 	}
 
-	RTL_OSVERSIONINFOW Version = { 0 };
-	Version.dwOSVersionInfoSize = sizeof(Version);
+#pragma region WIN7_SYM
+	//RTL_OSVERSIONINFOW Version = { 0 };
+	//Version.dwOSVersionInfoSize = sizeof(Version);
 
-	NTSTATUS status = RtlGetVersion(&Version);
-	DbgPrint("[xzzkernel]RtlGetVersion status: %x", status);
-	if (NT_SUCCESS(status))
-	{
-		if (Version.dwBuildNumber == 7600)
-		{
-			//初始化符号函数 7600
-			_DbgkDebugObjectType = (POBJECT_TYPE*)(ntos_base_addr + 0x200ED8);
-			DbgkpWakeTarget = (_DbgkpWakeTarget)(ntos_base_addr + 0x41AB50);
-			PsResumeThread = (_PsResumeThread)(ntos_base_addr + 0x3FF140);
-			PsSuspendThread = (_PsSuspendThread)(ntos_base_addr + 0x2C43DC);
-			PsGetNextProcessThread = (_PsGetNextProcessThread)(ntos_base_addr + 0x316EE0);
-			DbgkpSectionToFileHandle = (_DbgkpSectionToFileHandle)(ntos_base_addr + 0x486170);
-			MmGetFileNameForAddress = (_MmGetFileNameForAddress)(ntos_base_addr + 0x485D90);
-			KiDispatchException = (_KiDispatchException)(ntos_base_addr + 0xAC080);
-			DbgkForwardException = (_DbgkForwardException)(ntos_base_addr + 0x312C80);
-			DbgkpSuspendProcess = (_DbgkpSuspendProcess)(ntos_base_addr + 0x3FEBE0);
-			KeThawAllThreads = (_KeThawAllThreads)(ntos_base_addr + 0x12F790);
-			DbgkCreateThread = (_DbgkCreateThread)(ntos_base_addr + 0x33BF40);
-			DbgkMapViewOfSection = (_DbgkMapViewOfSection)(ntos_base_addr + 0x38DAFC);
-			DbgkUnMapViewOfSection = (_DbgkUnMapViewOfSection)(ntos_base_addr + 0x342704);
-			NtCreateUserProcess = (_NtCreateUserProcess)(ntos_base_addr + 0x31C080);
-			DbgkpMarkProcessPeb = (_DbgkpMarkProcessPeb)(ntos_base_addr + 0x409810);
-			DbgkpSuppressDbgMsg = (_DbgkpSuppressDbgMsg)(ntos_base_addr + 0x3F0BF0);
+	//NTSTATUS status = RtlGetVersion(&Version);
+	//DbgPrint("[xzzkernel]RtlGetVersion status: %x", status);
+	//if (NT_SUCCESS(status))
+	//{
+	//	if (Version.dwBuildNumber == 7600)
+	//	{
+	//		//初始化符号函数 7600
+	//		_DbgkDebugObjectType = (POBJECT_TYPE*)(ntos_base_addr + 0x200ED8);
+	//		DbgkpWakeTarget = (_DbgkpWakeTarget)(ntos_base_addr + 0x41AB50);
+	//		PsResumeThread = (_PsResumeThread)(ntos_base_addr + 0x3FF140);
+	//		PsSuspendThread = (_PsSuspendThread)(ntos_base_addr + 0x2C43DC);
+	//		PsGetNextProcessThread = (_PsGetNextProcessThread)(ntos_base_addr + 0x316EE0);
+	//		DbgkpSectionToFileHandle = (_DbgkpSectionToFileHandle)(ntos_base_addr + 0x486170);
+	//		MmGetFileNameForAddress = (_MmGetFileNameForAddress)(ntos_base_addr + 0x485D90);
+	//		KiDispatchException = (_KiDispatchException)(ntos_base_addr + 0xAC080);
+	//		DbgkForwardException = (_DbgkForwardException)(ntos_base_addr + 0x312C80);
+	//		DbgkpSuspendProcess = (_DbgkpSuspendProcess)(ntos_base_addr + 0x3FEBE0);
+	//		KeThawAllThreads = (_KeThawAllThreads)(ntos_base_addr + 0x12F790);
+	//		DbgkCreateThread = (_DbgkCreateThread)(ntos_base_addr + 0x33BF40);
+	//		DbgkMapViewOfSection = (_DbgkMapViewOfSection)(ntos_base_addr + 0x38DAFC);
+	//		DbgkUnMapViewOfSection = (_DbgkUnMapViewOfSection)(ntos_base_addr + 0x342704);
+	//		NtCreateUserProcess = (_NtCreateUserProcess)(ntos_base_addr + 0x31C080);
+	//		DbgkpMarkProcessPeb = (_DbgkpMarkProcessPeb)(ntos_base_addr + 0x409810);
+	//		DbgkpSuppressDbgMsg = (_DbgkpSuppressDbgMsg)(ntos_base_addr + 0x3F0BF0);
 
-			_oriNtCreateDebugObject = (_NtCreateDebugObject)(ntos_base_addr + 0x452180);
-			_oriNtDebugActiveProcess = (_NtDebugActiveProcess)(ntos_base_addr + 0x4C1A40);
+	//		_oriNtCreateDebugObject = (_NtCreateDebugObject)(ntos_base_addr + 0x452180);
+	//		_oriNtDebugActiveProcess = (_NtDebugActiveProcess)(ntos_base_addr + 0x4C1A40);
 
-			p_DbgkpProcessDebugPortMutex = (FAST_MUTEX*)(ntos_base_addr + 0x275920);
+	//		p_DbgkpProcessDebugPortMutex = (FAST_MUTEX*)(ntos_base_addr + 0x275920);
 
-			_oriDbgkpQueueMessage = (_DbgkpQueueMessage)(ntos_base_addr + 0x414990);
-			_oriDbgkpPostFakeProcessCreateMessages = (_DbgkpPostFakeProcessCreateMessages)(ntos_base_addr + 0x4C12E0);
+	//		_oriDbgkpQueueMessage = (_DbgkpQueueMessage)(ntos_base_addr + 0x414990);
+	//		_oriDbgkpPostFakeProcessCreateMessages = (_DbgkpPostFakeProcessCreateMessages)(ntos_base_addr + 0x4C12E0);
 
-			DbgPrint("init sym 7600 \n");
-		}
+	//		DbgPrint("init sym 7600 \n");
+	//	}
 
-		if (Version.dwBuildNumber == 7601)
-		{
-			//初始化符号函数
-			_DbgkDebugObjectType = (POBJECT_TYPE*)(ntos_base_addr + 0x1fc0d0);
-			DbgkpWakeTarget = (_DbgkpWakeTarget)(ntos_base_addr + 0x42E860);
-			PsResumeThread = (_PsResumeThread)(ntos_base_addr + 0x3C5E00);
-			PsSuspendThread = (_PsSuspendThread)(ntos_base_addr + 0x2BF5E8);
-			PsGetNextProcessThread = (_PsGetNextProcessThread)(ntos_base_addr + 0x301CD8);
-			DbgkpSectionToFileHandle = (_DbgkpSectionToFileHandle)(ntos_base_addr + 0x45AAB0);
-			MmGetFileNameForAddress = (_MmGetFileNameForAddress)(ntos_base_addr + 0x45A6D0);
-			KiDispatchException = (_KiDispatchException)(ntos_base_addr + 0x17A920);
-			DbgkForwardException = (_DbgkForwardException)(ntos_base_addr + 0x4324C0);
-			DbgkpSuspendProcess = (_DbgkpSuspendProcess)(ntos_base_addr + 0x3C58C0);
-			KeThawAllThreads = (_KeThawAllThreads)(ntos_base_addr + 0x10CC90);
-			DbgkCreateThread = (_DbgkCreateThread)(ntos_base_addr + 0x2D6760);
-			DbgkMapViewOfSection = (_DbgkMapViewOfSection)(ntos_base_addr + 0x2D9BD0);
-			DbgkUnMapViewOfSection = (_DbgkUnMapViewOfSection)(ntos_base_addr + 0x2D3F58);
-			NtCreateUserProcess = (_NtCreateUserProcess)(ntos_base_addr + 0x4DCC40);
-			DbgkpMarkProcessPeb = (_DbgkpMarkProcessPeb)(ntos_base_addr + 0x3D1370);
-			DbgkpSuppressDbgMsg = (_DbgkpSuppressDbgMsg)(ntos_base_addr + 0x3B6DB0);
+	//	if (Version.dwBuildNumber == 7601)
+	//	{
+	//		//初始化符号函数
+	//		_DbgkDebugObjectType = (POBJECT_TYPE*)(ntos_base_addr + 0x1fc0d0);
+	//		DbgkpWakeTarget = (_DbgkpWakeTarget)(ntos_base_addr + 0x42E860);
+	//		PsResumeThread = (_PsResumeThread)(ntos_base_addr + 0x3C5E00);
+	//		PsSuspendThread = (_PsSuspendThread)(ntos_base_addr + 0x2BF5E8);
+	//		PsGetNextProcessThread = (_PsGetNextProcessThread)(ntos_base_addr + 0x301CD8);
+	//		DbgkpSectionToFileHandle = (_DbgkpSectionToFileHandle)(ntos_base_addr + 0x45AAB0);
+	//		MmGetFileNameForAddress = (_MmGetFileNameForAddress)(ntos_base_addr + 0x45A6D0);
+	//		KiDispatchException = (_KiDispatchException)(ntos_base_addr + 0x17A920);
+	//		DbgkForwardException = (_DbgkForwardException)(ntos_base_addr + 0x4324C0);
+	//		DbgkpSuspendProcess = (_DbgkpSuspendProcess)(ntos_base_addr + 0x3C58C0);
+	//		KeThawAllThreads = (_KeThawAllThreads)(ntos_base_addr + 0x10CC90);
+	//		DbgkCreateThread = (_DbgkCreateThread)(ntos_base_addr + 0x2D6760);
+	//		DbgkMapViewOfSection = (_DbgkMapViewOfSection)(ntos_base_addr + 0x2D9BD0);
+	//		DbgkUnMapViewOfSection = (_DbgkUnMapViewOfSection)(ntos_base_addr + 0x2D3F58);
+	//		NtCreateUserProcess = (_NtCreateUserProcess)(ntos_base_addr + 0x4DCC40);
+	//		DbgkpMarkProcessPeb = (_DbgkpMarkProcessPeb)(ntos_base_addr + 0x3D1370);
+	//		DbgkpSuppressDbgMsg = (_DbgkpSuppressDbgMsg)(ntos_base_addr + 0x3B6DB0);
 
-			_oriNtCreateDebugObject = (_NtCreateDebugObject)(ntos_base_addr + 0x419BB0);
-			_oriNtDebugActiveProcess = (_NtDebugActiveProcess)(ntos_base_addr + 0x4A4930);
+	//		_oriNtCreateDebugObject = (_NtCreateDebugObject)(ntos_base_addr + 0x419BB0);
+	//		_oriNtDebugActiveProcess = (_NtDebugActiveProcess)(ntos_base_addr + 0x4A4930);
 
-			p_DbgkpProcessDebugPortMutex = (FAST_MUTEX*)(ntos_base_addr + 0x271760);
+	//		p_DbgkpProcessDebugPortMutex = (FAST_MUTEX*)(ntos_base_addr + 0x271760);
 
-			_oriDbgkpQueueMessage = (_DbgkpQueueMessage)(ntos_base_addr + 0x3DC610);
-			_oriDbgkpPostFakeProcessCreateMessages = (_DbgkpPostFakeProcessCreateMessages)(ntos_base_addr + 0x4A41E0);
+	//		_oriDbgkpQueueMessage = (_DbgkpQueueMessage)(ntos_base_addr + 0x3DC610);
+	//		_oriDbgkpPostFakeProcessCreateMessages = (_DbgkpPostFakeProcessCreateMessages)(ntos_base_addr + 0x4A41E0);
 
-			DbgPrint("init sym 7601 \n");
-		}
-	}
+	//		DbgPrint("init sym 7601 \n");
+	//	}
+	//}
+#pragma endregion
+
+#pragma region WIN10_1909_SYM
+	////初始化符号函数 WIN10_1909_10363.592
+	_DbgkDebugObjectType = (POBJECT_TYPE*)(ntos_base_addr + 0x5730F8);
+	DbgkpWakeTarget = (_DbgkpWakeTarget)(ntos_base_addr + 0x84A674);
+	PsResumeThread = (_PsResumeThread)(ntos_base_addr + 0x6C7AB0);
+	PsSuspendThread = (_PsSuspendThread)(ntos_base_addr + 0x6DE650);
+	PsGetNextProcessThread = (_PsGetNextProcessThread)(ntos_base_addr + 0x6504A0);
+	DbgkpSectionToFileHandle = (_DbgkpSectionToFileHandle)(ntos_base_addr + 0x84C378);
+	MmGetFileNameForAddress = (_MmGetFileNameForAddress)(ntos_base_addr + 0x888500);
+	KiDispatchException = (_KiDispatchException)(ntos_base_addr + 0xC73D0);
+	DbgkForwardException = (_DbgkForwardException)(ntos_base_addr + 0x6F4338);
+	DbgkpSuspendProcess = (_DbgkpSuspendProcess)(ntos_base_addr + 0x84C4BC);
+	//KeThawAllThreads = (_KeThawAllThreads)(ntos_base_addr + 0x12F790); // WIN10 没有这个函数
+	KeThawProcess = (_KeThawProcess)(ntos_base_addr + 0xF0188); // WIN10 的函数
+	DbgkCreateThread = (_DbgkCreateThread)(ntos_base_addr + 0x6063FC);
+	DbgkMapViewOfSection = (_DbgkMapViewOfSection)(ntos_base_addr + 0x6055B4);
+	DbgkUnMapViewOfSection = (_DbgkUnMapViewOfSection)(ntos_base_addr + 0x6D3514);
+	NtCreateUserProcess = (_NtCreateUserProcess)(ntos_base_addr + 0x62F240);
+	DbgkpMarkProcessPeb = (_DbgkpMarkProcessPeb)(ntos_base_addr + 0x8496D0);
+	DbgkpSuppressDbgMsg = (_DbgkpSuppressDbgMsg)(ntos_base_addr + 0x84C424);
+
+	_oriNtCreateDebugObject = (_NtCreateDebugObject)(ntos_base_addr + 0x84A6E0);
+	_oriNtDebugActiveProcess = (_NtDebugActiveProcess)(ntos_base_addr + 0x84A8D0);
+
+	p_DbgkpProcessDebugPortMutex = (FAST_MUTEX*)(ntos_base_addr + 0x465440);
+
+	_oriDbgkpQueueMessage = (_DbgkpQueueMessage)(ntos_base_addr + 0x84A078);
+	_oriDbgkpPostFakeProcessCreateMessages = (_DbgkpPostFakeProcessCreateMessages)(ntos_base_addr + 0x849970);
+
+
+
+
+	DbgPrint("init sym WIN10_1909 \n");
+#pragma endregion
+
+	
 
 	DbgPrint("KiDispatchException addr:%llx\n", KiDispatchException);
 	DbgPrint("DbgkForwardException addr:%llx\n", DbgkForwardException);
@@ -125,8 +164,8 @@ void r0_newfunc::startHook()
 
 	NewDbgkForwardExceptionHookInfo = hkEngin->hook(DbgkForwardException, NewDbgkForwardException);
 	NewDbgkCreateThreadHookInfo = hkEngin->hook(DbgkCreateThread, NewDbgkCreateThread);
-	NewDbgkMapViewOfSectionHookInfo = hkEngin->hook(DbgkMapViewOfSection, NewDbgkMapViewOfSection);
-	NewDbgkUnMapViewOfSectionHookInfo = hkEngin->hook(DbgkUnMapViewOfSection, NewDbgkUnMapViewOfSection);
+	//NewDbgkMapViewOfSectionHookInfo = hkEngin->hook(DbgkMapViewOfSection, NewDbgkMapViewOfSection);
+	//NewDbgkUnMapViewOfSectionHookInfo = hkEngin->hook(DbgkUnMapViewOfSection, NewDbgkUnMapViewOfSection);
 	NewDbgkpQueueMessageHookInfo = hkEngin->hook(_oriDbgkpQueueMessage, PrivateDbgkpQueueMessage);
 	// 
 	//NewNtCreateUserProcessHookInfo = hkEngin->hook(NtCreateUserProcess, NewNtCreateUserProcess);
@@ -1566,12 +1605,12 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpSendApiMessage(
 	NTSTATUS st;
 	PEPROCESS Process;
 	PAGED_CODE();
+	Process = PsGetCurrentProcess();
 	if (SuspendProcess)
 	{
-		SuspendProcess = DbgkpSuspendProcess();
+		SuspendProcess = DbgkpSuspendProcess(Process); // WIN10有参数 win7没有
 	}
 	ApiMsg->ReturnedStatus = STATUS_PENDING;
-	Process = PsGetCurrentProcess();
 	PS_SET_BITS(PrivateGetProcessFlags(Process), PS_PROCESS_FLAGS_CREATE_REPORTED);
 	st = PrivateDbgkpQueueMessage(Process, PsGetCurrentThread(), ApiMsg, 0, NULL);
 	//if (ApiMsg->ApiNumber == DbgKmCreateProcessApi && ApiMsg->u.CreateProcessInfo.FileHandle != NULL) {
@@ -1583,7 +1622,9 @@ NTSTATUS NTAPI r0_newfunc::PrivateDbgkpSendApiMessage(
 	ZwFlushInstructionCache(NtCurrentProcess(), NULL, 0);
 	if (SuspendProcess)
 	{
-		KeThawAllThreads();
+		//KeThawAllThreads(); // 这个函数WIN10里没有 恢复所有线程
+		KeThawProcess(Process, FALSE); // win10用 
+		KeLeaveCriticalRegion(); // win10
 	}
 
 	//DbgPrint("[xl2kerneldbg] PrivateDbgkpSendApiMessage called...status:%x\n", st);

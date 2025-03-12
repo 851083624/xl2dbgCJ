@@ -150,23 +150,28 @@ private:
 private:
 	bool IS_SYSTEM_THREAD(PETHREAD Thread)
 	{
-		return ((*(ULONG*)((char*)Thread + NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win7) & PS_CROSS_THREAD_FLAGS_SYSTEM) != 0);
+		//return ((*(ULONG*)((char*)Thread + NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win7) & PS_CROSS_THREAD_FLAGS_SYSTEM) != 0);
+		return ((*(ULONG*)((char*)Thread + 0x74) & 0x400) != 0); // win10_1909  Thread->MiscFlags 0x74
 	}
 	ULONG PrivateGetThreadCrossThreadFlags(PETHREAD Thread)
 	{
-		return *(ULONG*)((char*)Thread + NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win7);
+		//return *(ULONG*)((char*)Thread + NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win7);
+		return *(ULONG*)((char*)Thread + NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win10_1909);
 	}
 	ULONG* PrivateGetThreadCrossThreadFlagsPoint(PETHREAD Thread)
 	{
-		return (ULONG*)((char*)Thread + NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win7);
+		//return (ULONG*)((char*)Thread + NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win7);
+		return (ULONG*)((char*)Thread + NtSysAPI_ETHREAD_CrossThreadFlags_X64_Win10_1909);
 	}
 	void* PrivateGetThreadStartAddress(PETHREAD Thread)
 	{
-		return (void*)((char*)Thread + NtSysAPI_ETHREAD_StartAddress_X64_Win7);
+		//return (void*)((char*)Thread + NtSysAPI_ETHREAD_StartAddress_X64_Win7);
+		return (void*)((char*)Thread + NtSysAPI_ETHREAD_StartAddress_X64_Win10_1909);
 	}
 	PEX_RUNDOWN_REF PrivateGetThreadRundownProtect(PETHREAD Thread)
 	{
-		return (PEX_RUNDOWN_REF)((char*)Thread + NtSysAPI_ETHREAD_RundownProtect_X64_Win7);
+		//return (PEX_RUNDOWN_REF)((char*)Thread + NtSysAPI_ETHREAD_RundownProtect_X64_Win7);
+		return (PEX_RUNDOWN_REF)((char*)Thread + NtSysAPI_ETHREAD_RundownProtect_X64_Win10_1909);
 	}
 	PKTIMER PrivateGetThreadTimer(PETHREAD Thread)
 	{
@@ -175,23 +180,28 @@ private:
 private:
 	ULONG* PrivateGetProcessFlags(PEPROCESS Process)
 	{
-		return (ULONG*)((char*)Process + NtSysAPI_EPROCESS_Flags_X64_Win7);
+		//return (ULONG*)((char*)Process + NtSysAPI_EPROCESS_Flags_X64_Win7);
+		return (ULONG*)((char*)Process + NtSysAPI_EPROCESS_Flags_X64_Win10_1909);
 	}
 	PWOW64_PROCESS PrivateGetProcessWow64Process(PEPROCESS Process)
 	{
-		return (PWOW64_PROCESS)((char*)Process + NtSysAPI_EPROCESS_Wow64Process_X64_Win7);
+		//return (PWOW64_PROCESS)((char*)Process + NtSysAPI_EPROCESS_Wow64Process_X64_Win7);
+		return (PWOW64_PROCESS)((char*)Process + NtSysAPI_EPROCESS_Wow64Process_X64_Win10_1909);
 	}
 	void* PrivateGetProcessSectionObject(PEPROCESS Process)
 	{
-		return (void*)((char*)Process + NtSysAPI_EPROCESS_SectionObject_X64_Win7);
+		//return (void*)((char*)Process + NtSysAPI_EPROCESS_SectionObject_X64_Win7);
+		return (void*)((char*)Process + NtSysAPI_EPROCESS_SectionObject_X64_Win10_1909);
 	}
 	void* PrivateGetProcessSectionBaseAddress(PEPROCESS Process)
 	{
-		return (void*)((char*)Process + NtSysAPI_EPROCESS_SectionBaseAddress_X64_Win7);
+		//return (void*)((char*)Process + NtSysAPI_EPROCESS_SectionBaseAddress_X64_Win7);
+		return (void*)((char*)Process + NtSysAPI_EPROCESS_SectionBaseAddress_X64_Win10_1909);
 	}
 	PEX_RUNDOWN_REF PrivateGetProcessRundownProtect(PEPROCESS Process)
 	{
-		return (PEX_RUNDOWN_REF)((char*)Process + NtSysAPI_EPROCESS_RundownProtect_X64_Win7);
+		//return (PEX_RUNDOWN_REF)((char*)Process + NtSysAPI_EPROCESS_RundownProtect_X64_Win7);
+		return (PEX_RUNDOWN_REF)((char*)Process + NtSysAPI_EPROCESS_RundownProtect_X64_Win10_1909);
 	}
 	ULONG PrivateGetProcessUserTime(PEPROCESS Process)
 	{
@@ -215,6 +225,7 @@ private:
 	_DbgkForwardException DbgkForwardException = nullptr;
 	_DbgkpSuspendProcess DbgkpSuspendProcess = nullptr;//不需要实现 没有什么特殊的地方
 	_KeThawAllThreads KeThawAllThreads = nullptr;
+	_KeThawProcess KeThawProcess = nullptr;
 	_DbgkCreateThread DbgkCreateThread = nullptr;
 	_DbgkMapViewOfSection DbgkMapViewOfSection = nullptr;
 	_DbgkUnMapViewOfSection DbgkUnMapViewOfSection = nullptr;

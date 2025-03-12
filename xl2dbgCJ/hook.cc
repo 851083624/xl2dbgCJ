@@ -465,7 +465,7 @@ NTSTATUS NTAPI hook::NewNtDebugActiveProcess(
 	funcAddr_DbgUiRemoteBreakin = (ULONG64)GetProcAddress(hModule, "DbgUiRemoteBreakin");
 	cout << "funcAddr_DbgUiRemoteBreakin:" << hex << funcAddr_DbgUiRemoteBreakin << endl;
 
-	char hkCode[4] = {0xeb,0x31,0x90,0x90};
+	char hkCode[4] = {0xeb,0x44,0x90,0x90};  // win7_x64 eb 31    win10_1909 eb 44  这里没改的话附加后触发不了初始断点，CE附加不了
 	DWORD dwOldProt, dwNewProt;
 	bool b = true;
 	
